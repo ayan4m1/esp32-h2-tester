@@ -1,10 +1,12 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <Arduino.h>
-#include <ArduinoJson.h>
+#include <Datime.h>
+#include <OpenWeatherMap.h>
 #include <SPI.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include <time.h>
 
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 280
@@ -21,13 +23,20 @@
 
 #define OWM_API_KEY "changeme"
 
+#define OWM_CITY "Philadelphia, PA"
+#define OWM_COUNTRY "US"
+
+#define NTP_SERVER "pool.ntp.org"
+#define GMT_OFFSET -18000
+
 #define FONT_HEIGHT 16
 
+OpenWeatherMap weather;
 Adafruit_ST7789 display(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 static const char* timeStr = "Time: %02d:%02d";
 static const char* tempStr = "Temp: %.1f";
-static const char* presStr = "Pres: %.1f";
+static const char* presStr = "Pres: %d";
 static const char* connectingStr = "Connecting...";
 static const char* fetchingStr = "Fetching...";
 
@@ -41,21 +50,26 @@ void fetchData() {
 
   display.setCursor(x, y);
   display.print(fetchingStr);
-}
 
-void updateScreen() {
-  int16_t x, y;
-  uint16_t w, h;
+  OWM_CurrentWeather data;
+  weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
 
+  display.fillRect(x, y, w, h, ST77XX_BLACK);
   display.fillRect(0, 0, SCREEN_WIDTH, 60, ST77XX_BLACK);
 
+  struct tm curTime;
+  getLocalTime(&curTime);
+
+  auto timestamp = Datime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
+                          curTime.tm_hour, curTime.tm_min, curTime.tm_sec);
   char thisTemp[15];
   char thisPres[15];
   char thisTime[15];
 
-  snprintf(thisTemp, sizeof(thisTemp), tempStr, 49.2);
-  snprintf(thisPres, sizeof(thisPres), presStr, 5000.5);
-  snprintf(thisTime, sizeof(thisTime), timeStr, 12, 4);
+  snprintf(thisTemp, sizeof(thisTemp), tempStr, data.main.temp);
+  snprintf(thisPres, sizeof(thisPres), presStr, data.main.pressure);
+  snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour,
+           timestamp.minute);
 
   display.getTextBounds(thisTime, 12, 10, &x, &y, &w, &h);
   display.setCursor(x, y);
@@ -106,10 +120,17 @@ void setup() {
 
   // fill in "Connecting" text
   display.fillRect(x, y, w, h, ST77XX_BLACK);
+
+  // set up OWM API
+  weather.begin(OWM_API_KEY);
+  weather.setUnits(OWM_UNITS_IMPERIAL);
+  weather.setLanguage("en_us");
+  weather.setCacheDuration(0);
+
+  configTime(GMT_OFFSET, 0, NTP_SERVER);
 }
 
 void loop() {
   fetchData();
-  updateScreen();
   delay(60000);
 }
