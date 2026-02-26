@@ -19,6 +19,8 @@
 #define WIFI_SSID "qux"
 #define WIFI_PSK "changeme"
 
+#define OWM_API_KEY "changeme"
+
 #define FONT_HEIGHT 16
 
 Adafruit_ST7789 display(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
@@ -109,6 +111,5 @@ void setup() {
 void loop() {
   fetchData();
   updateScreen();
-
   delay(60000);
 }
