@@ -2,6 +2,7 @@
 #include <Adafruit_ST7789.h>
 #include <Arduino.h>
 #include <Datime.h>
+#include <FastLED.h>
 #include <OpenWeatherMap.h>
 #include <SPI.h>
 #include <WiFi.h>
@@ -31,22 +32,29 @@
 
 #define FONT_HEIGHT 16
 
+bool backlight = false;
 OpenWeatherMap weather;
 Adafruit_ST7789 display(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 static const char* timeStr = "Time: %02d:%02d";
-static const char* tempStr = "Temp: %.1f";
-static const char* presStr = "Pres: %d";
+static const char* tempStr = "Temp: %5.1f";
+static const char* presStr = "Pres: %5d";
 static const char* connectingStr = "Connecting...";
 static const char* fetchingStr = "Fetching...";
+
+#define MY_HUE_BLUE 150
+#define MY_HUE_RED 10
+
+#define TEMP_MIN 0
+#define TEMP_MAX 100
 
 void fetchData() {
   int16_t x, y;
   uint16_t w, h;
 
-  display.getTextBounds(fetchingStr, 0, (SCREEN_HEIGHT / 2) - (FONT_HEIGHT / 2),
+  display.getTextBounds(fetchingStr, 0, (SCREEN_WIDTH / 2) - (FONT_HEIGHT / 2),
                         &x, &y, &w, &h);
-  x = (SCREEN_WIDTH / 2) - (w / 2);
+  x = (SCREEN_HEIGHT / 2) - (w / 2);
 
   display.setCursor(x, y);
   display.print(fetchingStr);
@@ -55,7 +63,7 @@ void fetchData() {
   weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
 
   display.fillRect(x, y, w, h, ST77XX_BLACK);
-  display.fillRect(0, 0, SCREEN_WIDTH, 60, ST77XX_BLACK);
+  display.fillRect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH / 2, ST77XX_BLACK);
 
   struct tm curTime;
   getLocalTime(&curTime);
@@ -75,36 +83,51 @@ void fetchData() {
   display.setCursor(x, y);
   display.print(thisTime);
 
-  display.getTextBounds(thisTemp, 12, 10 + 18, &x, &y, &w, &h);
+  display.getTextBounds(thisTemp, 12, 10 + 26, &x, &y, &w, &h);
 
+  uint8_t hue =
+      map8(max((uint8_t)0, (uint8_t)(TEMP_MAX - data.main.temp)) / 255,
+           MY_HUE_BLUE, MY_HUE_RED);
+
+  CHSV tempColor = CHSV(hue, 255, 127);
+  CRGB tempColorRgb = hsv2rgb_fullspectrum(tempColor);
+  uint16_t tempColor565 =
+      (tempColorRgb.red << 11) | (tempColorRgb.green << 5) | tempColorRgb.blue;
+
+  display.setTextColor(tempColor565);
   display.setCursor(x, y);
   display.print(thisTemp);
 
-  display.getTextBounds(thisPres, 12, 28 + 18, &x, &y, &w, &h);
+  display.getTextBounds(thisPres, 12, 36 + 26, &x, &y, &w, &h);
 
+  display.setTextColor(ST77XX_WHITE);
   display.setCursor(x, y);
   display.print(thisPres);
+}
+
+void toggleBacklight() {
+  backlight = !backlight;
+  digitalWrite(TFT_BL, backlight ? HIGH : LOW);
 }
 
 void setup() {
   int16_t x, y;
   uint16_t w, h;
 
-  // enable backlight
+  // enable backlight pin
   pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, HIGH);
+  toggleBacklight();
 
-  // flip screen 180 degrees and init all black
+  // rotate screen 90 degrees and init all black
   display.init(SCREEN_WIDTH, SCREEN_HEIGHT);
-  display.setRotation(2);
+  display.setRotation(1);
   display.fillScreen(ST77XX_BLACK);
-  display.setTextSize(2);
+  display.setTextSize(3);
   display.setTextColor(ST77XX_WHITE);
 
   display.getTextBounds(connectingStr, 0,
-                        (SCREEN_HEIGHT / 2) - (FONT_HEIGHT / 2), &x, &y, &w,
-                        &h);
-  x = (SCREEN_WIDTH / 2) - (w / 2);
+                        (SCREEN_WIDTH / 2) - (FONT_HEIGHT / 2), &x, &y, &w, &h);
+  x = (SCREEN_HEIGHT / 2) - (w / 2);
 
   display.setCursor(x, y);
   display.print(connectingStr);
