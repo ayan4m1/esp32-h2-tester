@@ -111,6 +111,12 @@ void toggleBacklight() {
 }
 
 void setup() {
+  Serial.begin(115200);
+  while (!Serial) {
+    delay(50);
+  }
+  Serial.println("Start running!");
+
   int16_t x, y;
   uint16_t w, h;
 
@@ -140,6 +146,8 @@ void setup() {
   while (!WiFi.isConnected()) {
     delay(1000);
   }
+
+  Serial.println("Connecting!");
 
   // fill in "Connecting" text
   display.fillRect(x, y, w, h, ST77XX_BLACK);
