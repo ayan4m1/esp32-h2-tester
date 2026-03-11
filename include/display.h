@@ -3,30 +3,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// BEGIN CONFIG
-#include "esp_lcd_panel_st7789.h"
-#define LCD_SPI_HOST SPI3_HOST
-#define LCD_PIN_NUM_MOSI 19
-#define LCD_PIN_NUM_CLK 18
-#define LCD_PIN_NUM_CS 5
-#define LCD_PIN_NUM_DC 16
-#define LCD_PIN_NUM_RST 23
-#define LCD_PIN_NUM_BCKL 4
-#define LCD_INIT esp_lcd_new_panel_st7789
-#define LCD_HRES 135
-#define LCD_VRES 240
-#define LCD_COLOR_SPACE LCD_COLOR_RGB
-#define LCD_CLOCK_HZ (40 * 1000 * 1000)
-#define LCD_GAP_X 40
-#define LCD_GAP_Y 52
-#define LCD_MIRROR_X 0
-#define LCD_MIRROR_Y 1
-#define LCD_INVERT_COLOR 1
-#define LCD_SWAP_XY 1
-#define LCD_DIVISOR 2
-#define LCD_PIN_NUM_BCKL 4
-// END CONFIG
-
+#include <stdint.h>
+#include "display_config.h"
 // BEGIN NON-USER CODE
 #define LCD_COLOR_RGB 1
 #define LCD_COLOR_BGR 2

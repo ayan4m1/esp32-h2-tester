@@ -6,36 +6,31 @@
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_lcd_panel_ops.h"
-#include "esp_lcd_io_spi.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_vendor.h"
 #include "driver/gpio.h"
-#include "driver/spi_master.h"
+#include "driver/i2c.h"
 static const char* TAG = "lcd";
 static uint8_t* buffer1;
 static uint8_t* buffer2;
-static bool spi_initialized = false;
+static bool i2c_initialized = false;
 static esp_lcd_panel_io_handle_t lcd_io_handle = NULL;
 static esp_lcd_panel_handle_t lcd_handle = NULL;
-static void spi_init(void) {
-    if(spi_initialized) {
+static void i2c_init() {
+    if(i2c_initialized) {
         return;
     }
-    spi_bus_config_t spi_cfg;
-    uint32_t spi_sz;
-
-    memset(&spi_cfg,0,sizeof(spi_cfg));
-    spi_sz = LCD_TRANSFER_SIZE+8;
-
-    if(spi_sz>32*1024) {
-        ESP_LOGW(TAG,"SPI transfer size is limited to 32KB, but a SPI host device demands more. Increase LCD_DIVISOR");
-        spi_sz = 32*1024;
-    }
-    spi_cfg.max_transfer_sz = spi_sz;
-    spi_cfg.sclk_io_num = LCD_PIN_NUM_CLK;
-    spi_cfg.mosi_io_num = LCD_PIN_NUM_MOSI;
-    spi_cfg.miso_io_num = -1;
-    
-    ESP_ERROR_CHECK(spi_bus_initialize((spi_host_device_t)LCD_SPI_HOST,&spi_cfg,SPI_DMA_CH_AUTO));    
-    spi_initialized = true;
+    i2c_config_t i2c_cfg;
+    memset(&i2c_cfg,0,sizeof(i2c_cfg));
+    i2c_cfg.master.clk_speed = LCD_CLOCK_HZ;
+    i2c_cfg.mode = I2C_MODE_MASTER;
+    i2c_cfg.sda_io_num = LCD_PIN_NUM_SDA;
+    i2c_cfg.sda_pullup_en = 1;
+    i2c_cfg.scl_io_num = LCD_PIN_NUM_SCL;
+    i2c_cfg.scl_pullup_en = 1;
+    ESP_ERROR_CHECK(i2c_driver_install((i2c_port_t)LCD_I2C_HOST,I2C_MODE_MASTER,0,0,0));
+    ESP_ERROR_CHECK(i2c_param_config((i2c_port_t)LCD_I2C_HOST,&i2c_cfg));
+    i2c_initialized=true;
 }
 static IRAM_ATTR bool on_flush_complete(esp_lcd_panel_io_handle_t lcd_io, esp_lcd_panel_io_event_data_t* edata, void* user_ctx) {
     lcd_flush_complete();
@@ -46,7 +41,7 @@ void lcd_init(void) {
         ESP_LOGW(TAG,"lcd_init() was already called");
         return; // already initialized
     }
-    spi_init();
+    i2c_init();
     buffer1 = (uint8_t*)heap_caps_malloc(LCD_TRANSFER_SIZE,MALLOC_CAP_DMA);
     if(!buffer1) {
         ESP_ERROR_CHECK(ESP_ERR_NO_MEM);
@@ -68,25 +63,21 @@ void lcd_init(void) {
 #ifdef LCD_RESET
     LCD_RESET;
 #endif
-    esp_lcd_panel_io_spi_config_t lcd_spi_cfg;
-    memset(&lcd_spi_cfg,0,sizeof(lcd_spi_cfg));
-    lcd_spi_cfg.cs_gpio_num = LCD_PIN_NUM_CS;
-    lcd_spi_cfg.dc_gpio_num = LCD_PIN_NUM_DC;
-    lcd_spi_cfg.lcd_cmd_bits = 8;
-    lcd_spi_cfg.lcd_param_bits = 8;        
-#ifdef LCD_CLOCK_HZ
-    lcd_spi_cfg.pclk_hz = LCD_CLOCK_HZ;
-#else
-    lcd_spi_cfg.pclk_hz = 20 * 1000 * 1000;
+    esp_lcd_panel_io_i2c_config_t lcd_i2c_cfg;
+    memset(&lcd_i2c_cfg,0,sizeof(lcd_i2c_cfg));
+    lcd_i2c_cfg.control_phase_bytes = LCD_CONTROL_PHASE_BYTES;
+    lcd_i2c_cfg.dc_bit_offset = LCD_DC_BIT_OFFSET;
+    lcd_i2c_cfg.dev_addr = LCD_I2C_ADDRESS;
+#ifdef LCD_DISABLE_CONTROL_PHASE
+#if LCD_DISABLE_CONTROL_PHASE > 0
+    lcd_i2c_cfg.flags.disable_control_phase = 1;
 #endif
-    lcd_spi_cfg.trans_queue_depth = 10;
-    lcd_spi_cfg.on_color_trans_done = on_flush_complete;
-#ifdef LCD_SPI_MODE
-    lcd_spi_cfg.spi_mode = LCD_SPI_MODE;
-#else
-    lcd_spi_cfg.spi_mode = 0;
 #endif
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_SPI_HOST, &lcd_spi_cfg, &lcd_io_handle));
+    lcd_i2c_cfg.lcd_cmd_bits = 8;
+    lcd_i2c_cfg.lcd_param_bits = 8;
+    lcd_i2c_cfg.on_color_trans_done = on_flush_complete;
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c((esp_lcd_i2c_bus_handle_t)LCD_I2C_HOST, &lcd_i2c_cfg, &lcd_io_handle));
+    
     esp_lcd_panel_dev_config_t panel_config;
     memset(&panel_config,0,sizeof(panel_config));
 #ifdef LCD_PIN_NUM_RST
@@ -99,18 +90,14 @@ void lcd_init(void) {
 #endif
     
 #if LCD_COLOR_SPACE == LCD_COLOR_RGB
-    panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
+    panel_config.color_space = ESP_LCD_COLOR_SPACE_RGB;
 #elif LCD_COLOR_SPACE == LCD_COLOR_BGR
-    panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR;
+    panel_config.color_space = ESP_LCD_COLOR_SPACE_BGR;
 #elif LCD_COLOR_SPACE == LCD_COLOR_GSC
     // seems to work
-    panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
+    panel_config.color_space = ESP_LCD_COLOR_SPACE_MONOCHROME;
 #endif
-#if defined(LCD_DATA_ENDIAN_LITTLE) && LCD_DATA_ENDIAN_LITTLE > 0
-    panel_config.data_endian = LCD_RGB_DATA_ENDIAN_LITTLE;
-#else
-    panel_config.data_endian = LCD_RGB_DATA_ENDIAN_BIG;
-#endif
+
     panel_config.bits_per_pixel = LCD_BIT_DEPTH;
     ESP_ERROR_CHECK(LCD_INIT(lcd_io_handle, &panel_config, &lcd_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_reset(lcd_handle));

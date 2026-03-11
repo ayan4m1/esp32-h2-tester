@@ -24,10 +24,15 @@ static void uix_flush(const rect16& bounds, const void* bitmap, void* state) {
     // similar to LVGL
     lcd_flush(bounds.x1,bounds.y1,bounds.x2,bounds.y2,(void*)bitmap);
 }
+#if LCD_COLOR_SPACE == LCD_COLOR_GSC
+#define PIXEL gsc_pixel<LCD_BIT_DEPTH>
+#else
+#define PIXEL rgb_pixel<LCD_BIT_DEPTH>
+#endif
 // the following can be abbreviated as
 // using screen_t = uix::screen<rgb_pixel<16>>; 
 // for most configurations
-using screen_t = uix::screen_ex<bitmap<rgb_pixel<LCD_BIT_DEPTH>>,LCD_X_ALIGN,LCD_Y_ALIGN>;
+using screen_t = uix::screen_ex<bitmap<PIXEL>,LCD_X_ALIGN,LCD_Y_ALIGN>;
 
 // native screen color
 using scr_color_t = color<screen_t::pixel_type>;
@@ -47,8 +52,8 @@ void setup() {
     lcd_init();
     // setting up the display is similar to LVGL
     lcd.buffer_size(LCD_TRANSFER_SIZE);
-    lcd.buffer1(lcd_buffer1());
-    lcd.buffer2(lcd_buffer2());
+    lcd.buffer1((uint8_t*)lcd_buffer1());
+    lcd.buffer2((uint8_t*)lcd_buffer2());
     lcd.on_flush_callback(uix_flush);
 
     text_font.initialize();
