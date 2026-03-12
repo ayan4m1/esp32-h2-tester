@@ -171,6 +171,8 @@ void fetch_data() {
   pres_label.text(thisPres);
   temp_label.text(thisTemp);
   hume_label.text(thisHume);
+
+  lcd.update();
 }
 
 void setup() {
@@ -254,6 +256,4 @@ void setup() {
 
 void loop() {
   EVERY_N_MINUTES(1) { fetch_data(); }
-
-  lcd.update();
 }
