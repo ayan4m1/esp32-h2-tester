@@ -16,9 +16,9 @@
 #include "cloud_rain_icon.hpp"
 #undef CLOUD_RAIN_ICON_IMPLEMENTATION
 
-#define CLOUD_SOLID_ICON_IMPLEMENTATION
-#include "cloud_solid_icon.hpp"
-#undef CLOUD_SOLID_ICON_IMPLEMENTATION
+#define CLOUD_ICON_IMPLEMENTATION
+#include "cloud_icon.hpp"
+#undef CLOUD_ICON_IMPLEMENTATION
 
 #define CLOUDS_SUN_ICON_IMPLEMENTATION
 #include "clouds_sun_icon.hpp"
@@ -32,6 +32,22 @@
 #include "lightning_icon.hpp"
 #undef LIGHTNING_ICON_IMPLEMENTATION
 
+#define CLOUD_FOG_ICON_IMPLEMENTATION
+#include "cloud_fog_icon.hpp"
+#undef CLOUD_FOG_ICON_IMPLEMENTATION
+
+#define CLOUDS_ICON_IMPLEMENTATION
+#include "clouds_icon.hpp"
+#undef CLOUDS_ICON_IMPLEMENTATION
+
+#define SUN_ICON_IMPLEMENTATION
+#include "sun_icon.hpp"
+#undef SUN_ICON_IMPLEMENTATION
+
+#define QUESTION_ICON_IMPLEMENTATION
+#include "question_icon.hpp"
+#undef QUESTION_ICON_IMPLEMENTATION
+
 #define WIFI_SSID "qux"
 #define WIFI_PSK "changeme"
 
@@ -41,7 +57,7 @@
 #define OWM_COUNTRY "US"
 
 #define NTP_SERVER "pool.ntp.org"
-#define GMT_OFFSET -18000
+#define GMT_OFFSET -14400
 
 #define TEMP_HUE_COLD 150
 #define TEMP_HUE_HOT 10
@@ -55,9 +71,10 @@ using namespace uix;
 static uix::display lcd;
 static OpenWeatherMap weather;
 
-static const char* timeStr = "%02d:%02d";
-static const char* tempStr = "%5.1f°F";
-static const char* presStr = "%5dmb";
+static const char* timeStr = " %02d:%02d";
+static const char* tempStr = "%6.1f °F";
+static const char* presStr = "%6d mb";
+static const char* humeStr = "%6d %%RH";
 static const char* connectingStr = "Connecting...";
 static const char* fetchingStr = "Fetching...";
 
@@ -84,9 +101,15 @@ using scr_color_t = color<screen_t::pixel_type>;
 // UIX color (rgba32)
 using uix_color_t = color<uix_pixel>;
 
-static tt_font text_font(telegrama, LCD_HEIGHT / 8, font_size_units::px);
+static tt_font small_text_font(telegrama, 10, font_size_units::px);
+
+static tt_font large_text_font(telegrama, 14, font_size_units::px);
+
+static tt_font clock_text_font(telegrama, 28, font_size_units::px);
 
 static screen_t main_screen;
+
+static screen_t loading_screen;
 
 // each control has a "control surface" derived from a type indicated by the
 // screen:
@@ -94,10 +117,14 @@ using label_t = uix::label<screen_t::control_surface_type>;
 
 using icon_t = uix::image_box<screen_t::control_surface_type>;
 
-label_t timeLabel;
-label_t tempLabel;
-label_t presLabel;
-icon_t weatherIcon;
+using vlabel_t = uix::vlabel<screen_t::control_surface_type>;
+
+label_t loading_label;
+label_t time_label;
+label_t temp_label;
+label_t hume_label;
+label_t pres_label;
+icon_t weather_icon;
 
 void fetch_data() {
   OWM_CurrentWeather data;
@@ -109,56 +136,45 @@ void fetch_data() {
   auto timestamp = Datime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
                           curTime.tm_hour, curTime.tm_min, curTime.tm_sec);
 
-  char thisTemp[15];
-  char thisPres[15];
-  char thisTime[15];
+  static char thisTemp[15];
+  static char thisPres[15];
+  static char thisTime[15];
+  static char thisHume[15];
+
+  if (!strcmp(data.weather.description, "snow")) {
+    weather_icon.image(snowflake_icon);
+  } else if (!strcmp(data.weather.description, "few clouds")) {
+    weather_icon.image(clouds_sun_icon);
+  } else if (!strcmp(data.weather.description, "scattered clouds")) {
+    weather_icon.image(cloud_icon);
+  } else if (!strcmp(data.weather.description, "broken clouds")) {
+    weather_icon.image(clouds_icon);
+  } else if (!strcmp(data.weather.description, "rain") ||
+             !strcmp(data.weather.description, "shower rain")) {
+    weather_icon.image(cloud_rain_icon);
+  } else if (!strcmp(data.weather.description, "thunderstorm")) {
+    weather_icon.image(lightning_icon);
+  } else if (!strcmp(data.weather.description, "clear sky")) {
+    weather_icon.image(sun_icon);
+  } else if (!strcmp(data.weather.description, "mist") ||
+             !strcmp(data.weather.description, "haze")) {
+    weather_icon.image(cloud_fog_icon);
+  }
 
   snprintf(thisTemp, sizeof(thisTemp), tempStr, data.main.temp);
   snprintf(thisPres, sizeof(thisPres), presStr, data.main.pressure);
   snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour,
            timestamp.minute);
+  snprintf(thisHume, sizeof(thisHume), humeStr, data.main.humidity);
 
-  timeLabel.text(thisTime);
-  presLabel.text(thisPres);
-  tempLabel.text(thisTemp);
-
-  USBSerial.println(thisTime);
-  USBSerial.println(thisPres);
-  USBSerial.println(thisTemp);
-
-  timeLabel.invalidate();
-  presLabel.invalidate();
-  tempLabel.invalidate();
-
-  // float range = TEMP_HOT - TEMP_COLD;
-  // float normalized = (data.main.temp - TEMP_COLD) / range;
-  // uint8_t hue = map8(normalized * 255, TEMP_HUE_COLD, TEMP_HUE_HOT);
-  // CHSV tempColor = CHSV(hue, 255, 127);
-  // CRGB tempColorRgb = hsv2rgb_fullspectrum(tempColor);
-  // uint16_t tempColor565 =
-  //     (tempColorRgb.red << 11) | (tempColorRgb.green << 5) |
-  //     tempColorRgb.blue;
+  time_label.text(thisTime);
+  pres_label.text(thisPres);
+  temp_label.text(thisTemp);
+  hume_label.text(thisHume);
 }
 
 void setup() {
   USBSerial.begin(115200);
-  while (!USBSerial) {
-    delay(50);
-  }
-  USBSerial.println("Starting!");
-
-  WiFi.begin(WIFI_SSID, WIFI_PSK);
-  while (!WiFi.isConnected()) {
-    delay(1000);
-  }
-  USBSerial.println("Connected!");
-
-  weather.begin(OWM_API_KEY);
-  weather.setUnits(OWM_UNITS_IMPERIAL);
-  weather.setLanguage("en_us");
-  weather.setCacheDuration(0);
-
-  configTime(GMT_OFFSET, 0, NTP_SERVER);
 
   lcd_init();
 
@@ -167,44 +183,77 @@ void setup() {
   lcd.buffer2((uint8_t*)lcd_buffer2());
   lcd.on_flush_callback(uix_flush);
 
-  text_font.initialize();
-  text_font.size(10, gfx::font_size_units::px);
+  small_text_font.initialize();
+  large_text_font.initialize();
+  clock_text_font.initialize();
 
-  // DO THIS FIRST OR CRASHY CRASHY ON PAINT!
+  loading_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
+  loading_screen.background_color(scr_color_t::black);
+
+  loading_label.bounds(srect16(0, 0, LCD_WIDTH, LCD_HEIGHT));
+  loading_label.font(large_text_font);
+  loading_label.color(uix_color_t::white);
+  loading_label.text(connectingStr);
+  loading_label.text_justify(uix_justify::center);
+
+  loading_screen.register_control(loading_label);
+
+  lcd.active_screen(loading_screen);
+  lcd.update();
+
+  WiFi.begin(WIFI_SSID, WIFI_PSK);
+  while (!WiFi.isConnected()) {
+    delay(1000);
+  }
+
+  loading_label.text(fetchingStr);
+  lcd.update();
+
+  weather.begin(OWM_API_KEY);
+  weather.setUnits(OWM_UNITS_IMPERIAL);
+  weather.setLanguage("en_us");
+  weather.setCacheDuration(0);
+
+  configTime(GMT_OFFSET, 0, NTP_SERVER);
+
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
-
-  // the background color of the screen is always
-  // in the native screen pixel format. All other
-  // UIX business is in UIX pixel format
   main_screen.background_color(scr_color_t::black);
 
-  timeLabel.bounds(srect16(0, 0, LCD_WIDTH, 10));
-  timeLabel.font(text_font);
-  timeLabel.color(uix_color_t::white);
-  timeLabel.text_justify(uix_justify::top_left);
-  main_screen.register_control(timeLabel);
+  time_label.bounds(srect16(0, LCD_HEIGHT - 32, LCD_WIDTH, LCD_HEIGHT));
+  time_label.font(clock_text_font);
+  time_label.color(uix_color_t::white);
+  time_label.text_justify(uix_justify::top_right);
+  main_screen.register_control(time_label);
 
-  tempLabel.bounds(srect16(0, 10, LCD_WIDTH, 20));
-  tempLabel.font(text_font);
-  tempLabel.color(uix_color_t::white);
-  tempLabel.text_justify(uix_justify::top_left);
-  main_screen.register_control(tempLabel);
+  temp_label.bounds(srect16(0, 0, LCD_WIDTH - 32, 10));
+  temp_label.font(small_text_font);
+  temp_label.color(uix_color_t::white);
+  temp_label.text_justify(uix_justify::top_left);
+  main_screen.register_control(temp_label);
 
-  presLabel.bounds(srect16(0, 20, LCD_WIDTH, 30));
-  presLabel.font(text_font);
-  presLabel.color(uix_color_t::white);
-  presLabel.text_justify(uix_justify::top_left);
-  main_screen.register_control(presLabel);
+  hume_label.bounds(srect16(0, 10, LCD_WIDTH - 32, 20));
+  hume_label.font(small_text_font);
+  hume_label.color(uix_color_t::white);
+  hume_label.text_justify(uix_justify::top_left);
+  main_screen.register_control(hume_label);
 
-  weatherIcon.bounds(
-      srect16(LCD_WIDTH - 32, LCD_HEIGHT - 32, LCD_WIDTH, LCD_HEIGHT));
-  weatherIcon.image(lightning_icon);
-  main_screen.register_control(weatherIcon);
+  pres_label.bounds(srect16(0, 20, LCD_WIDTH - 32, 30));
+  pres_label.font(small_text_font);
+  pres_label.color(uix_color_t::white);
+  pres_label.text_justify(uix_justify::top_left);
+  main_screen.register_control(pres_label);
+
+  weather_icon.bounds(srect16(LCD_WIDTH - 32, 0, LCD_WIDTH, 32));
+  weather_icon.image(question_icon);
+  main_screen.register_control(weather_icon);
 
   lcd.active_screen(main_screen);
+
+  fetch_data();
 }
 
 void loop() {
-  lcd.update();
   EVERY_N_MINUTES(1) { fetch_data(); }
+
+  lcd.update();
 }
