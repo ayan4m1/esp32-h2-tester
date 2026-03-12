@@ -1,5 +1,8 @@
 
 #include <Arduino.h>
+#include <Datime.h>
+#include <FastLED.h>
+#include <OpenWeatherMap.h>
 // display configuration is below:
 #include "display.h"
 #include "gfx.hpp"
@@ -29,10 +32,34 @@
 #include "lightning_icon.hpp"
 #undef LIGHTNING_ICON_IMPLEMENTATION
 
+#define WIFI_SSID "qux"
+#define WIFI_PSK "changeme"
+
+#define OWM_API_KEY "changeme"
+
+#define OWM_CITY "Philadelphia, PA"
+#define OWM_COUNTRY "US"
+
+#define NTP_SERVER "pool.ntp.org"
+#define GMT_OFFSET -18000
+
+#define TEMP_HUE_COLD 150
+#define TEMP_HUE_HOT 10
+
+#define TEMP_COLD 32
+#define TEMP_HOT 100
+
 using namespace gfx;
 using namespace uix;
 
 static uix::display lcd;
+static OpenWeatherMap weather;
+
+static const char* timeStr = "%02d:%02d";
+static const char* tempStr = "%5.1f°F";
+static const char* presStr = "%5dmb";
+static const char* connectingStr = "Connecting...";
+static const char* fetchingStr = "Fetching...";
 
 void lcd_flush_complete(void) {
   // let UIX know the DMA transfer completed
@@ -72,9 +99,69 @@ label_t tempLabel;
 label_t presLabel;
 icon_t weatherIcon;
 
+void fetch_data() {
+  OWM_CurrentWeather data;
+  weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
+
+  struct tm curTime;
+  getLocalTime(&curTime);
+
+  auto timestamp = Datime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
+                          curTime.tm_hour, curTime.tm_min, curTime.tm_sec);
+
+  char thisTemp[15];
+  char thisPres[15];
+  char thisTime[15];
+
+  snprintf(thisTemp, sizeof(thisTemp), tempStr, data.main.temp);
+  snprintf(thisPres, sizeof(thisPres), presStr, data.main.pressure);
+  snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour,
+           timestamp.minute);
+
+  timeLabel.text(thisTime);
+  presLabel.text(thisPres);
+  tempLabel.text(thisTemp);
+
+  USBSerial.println(thisTime);
+  USBSerial.println(thisPres);
+  USBSerial.println(thisTemp);
+
+  timeLabel.invalidate();
+  presLabel.invalidate();
+  tempLabel.invalidate();
+
+  // float range = TEMP_HOT - TEMP_COLD;
+  // float normalized = (data.main.temp - TEMP_COLD) / range;
+  // uint8_t hue = map8(normalized * 255, TEMP_HUE_COLD, TEMP_HUE_HOT);
+  // CHSV tempColor = CHSV(hue, 255, 127);
+  // CRGB tempColorRgb = hsv2rgb_fullspectrum(tempColor);
+  // uint16_t tempColor565 =
+  //     (tempColorRgb.red << 11) | (tempColorRgb.green << 5) |
+  //     tempColorRgb.blue;
+}
+
 void setup() {
+  USBSerial.begin(115200);
+  while (!USBSerial) {
+    delay(50);
+  }
+  USBSerial.println("Starting!");
+
+  WiFi.begin(WIFI_SSID, WIFI_PSK);
+  while (!WiFi.isConnected()) {
+    delay(1000);
+  }
+  USBSerial.println("Connected!");
+
+  weather.begin(OWM_API_KEY);
+  weather.setUnits(OWM_UNITS_IMPERIAL);
+  weather.setLanguage("en_us");
+  weather.setCacheDuration(0);
+
+  configTime(GMT_OFFSET, 0, NTP_SERVER);
+
   lcd_init();
-  // setting up the display is similar to LVGL
+
   lcd.buffer_size(LCD_TRANSFER_SIZE);
   lcd.buffer1((uint8_t*)lcd_buffer1());
   lcd.buffer2((uint8_t*)lcd_buffer2());
@@ -91,31 +178,33 @@ void setup() {
   // UIX business is in UIX pixel format
   main_screen.background_color(scr_color_t::black);
 
-  size16 tempBounds;
-
-  text_font.measure(LCD_WIDTH, "Time:", &tempBounds);
-
-  // make the label the whole screen
   timeLabel.bounds(srect16(0, 0, LCD_WIDTH, 10));
   timeLabel.font(text_font);
   timeLabel.color(uix_color_t::white);
   timeLabel.text_justify(uix_justify::top_left);
-  timeLabel.text("09:55");
   main_screen.register_control(timeLabel);
 
   tempLabel.bounds(srect16(0, 10, LCD_WIDTH, 20));
   tempLabel.font(text_font);
   tempLabel.color(uix_color_t::white);
   tempLabel.text_justify(uix_justify::top_left);
-  tempLabel.text("74.5°F");
   main_screen.register_control(tempLabel);
+
+  presLabel.bounds(srect16(0, 20, LCD_WIDTH, 30));
+  presLabel.font(text_font);
+  presLabel.color(uix_color_t::white);
+  presLabel.text_justify(uix_justify::top_left);
+  main_screen.register_control(presLabel);
 
   weatherIcon.bounds(
       srect16(LCD_WIDTH - 32, LCD_HEIGHT - 32, LCD_WIDTH, LCD_HEIGHT));
   weatherIcon.image(lightning_icon);
   main_screen.register_control(weatherIcon);
-  // tell the panel what screen we're on
+
   lcd.active_screen(main_screen);
 }
 
-void loop() { lcd.update(); }
+void loop() {
+  lcd.update();
+  EVERY_N_MINUTES(1) { fetch_data(); }
+}
