@@ -141,7 +141,9 @@ void fetch_data() {
   static char thisTime[15];
   static char thisHume[15];
 
-  if (!strcmp(data.weather.description, "snow")) {
+  uint8_t status_code = floor(data.weather.id / 100);
+
+  if (status_code == 6) {
     weather_icon.image(snowflake_icon);
   } else if (!strcmp(data.weather.description, "few clouds")) {
     weather_icon.image(clouds_sun_icon);
@@ -149,15 +151,13 @@ void fetch_data() {
     weather_icon.image(cloud_icon);
   } else if (!strcmp(data.weather.description, "broken clouds")) {
     weather_icon.image(clouds_icon);
-  } else if (!strcmp(data.weather.description, "rain") ||
-             !strcmp(data.weather.description, "shower rain")) {
+  } else if (status_code == 5 || status_code == 3) {
     weather_icon.image(cloud_rain_icon);
-  } else if (!strcmp(data.weather.description, "thunderstorm")) {
+  } else if (status_code == 2) {
     weather_icon.image(lightning_icon);
-  } else if (!strcmp(data.weather.description, "clear sky")) {
+  } else if (status_code == 8) {
     weather_icon.image(sun_icon);
-  } else if (!strcmp(data.weather.description, "mist") ||
-             !strcmp(data.weather.description, "haze")) {
+  } else if (status_code == 7) {
     weather_icon.image(cloud_fog_icon);
   }
 
