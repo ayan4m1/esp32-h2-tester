@@ -166,7 +166,8 @@ void fetch_data() {
     }
   } else if (!strcmp(data.weather.description, "scattered clouds")) {
     weather_icon.image(cloud_icon);
-  } else if (!strcmp(data.weather.description, "broken clouds")) {
+  } else if (!strcmp(data.weather.description, "broken clouds") ||
+             !strcmp(data.weather.description, "overcast clouds")) {
     weather_icon.image(clouds_icon);
   } else if (status_code == 5 || status_code == 3) {
     weather_icon.image(cloud_rain_icon);
