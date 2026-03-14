@@ -1,5 +1,3 @@
-
-#include <Arduino.h>
 #include <Datime.h>
 #include <FastLED.h>
 #include <OpenWeatherMap.h>
@@ -130,21 +128,12 @@ label_t hume_label;
 label_t pres_label;
 icon_t weather_icon;
 
-void animate_label(bool state) {
-  auto bounds = srect16(state ? LCD_WIDTH - 1 : 0, LCD_HEIGHT - 32, LCD_WIDTH,
-                        LCD_HEIGHT);
+void animate_label(bool state, bool rightAlign = false) {
+  auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
-  uint16_t x2 = bounds.x2;
 
-  while (state ? x1-- > 0 : x1++ < LCD_WIDTH - 1) {
-    if (state) {
-      x2--;
-    } else {
-      x2++;
-    }
-
+  while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1) {
     bounds.x1 = x1;
-    bounds.x2 = x2;
     time_label.bounds(bounds);
     lcd.update();
     delayMicroseconds(8335);
@@ -221,19 +210,21 @@ void fetch_data() {
 
   lcd.update();
 
-  // delay(5000);
-  // animate_label(false);
-  // time_label.text(thisShortTemp);
-  // time_label.text_justify(uix_justify::top_left);
-  // animate_label(true);
-  // delay(5000);
-  // animate_label(false);
-  // time_label.text(thisTime);
-  // time_label.text_justify(uix_justify::top_right);
-  // animate_label(true);
+  delay(5000);
+  animate_label(false);
+  time_label.text(thisShortTemp);
+  animate_label(true);
+  delay(5000);
+  animate_label(false);
+  time_label.text(thisTime);
+  animate_label(true, true);
 }
 
-void setup() {
+void app_loop(void* params) {
+  EVERY_N_MINUTES(1) { fetch_data(); }
+}
+
+void app_main() {
   USBSerial.begin(115200);
 
   lcd_init();
@@ -278,10 +269,10 @@ void setup() {
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
   main_screen.background_color(scr_color_t::black);
 
-  time_label.bounds(srect16(0, LCD_HEIGHT - 32, LCD_WIDTH, LCD_HEIGHT));
+  time_label.bounds(srect16(16, LCD_HEIGHT - 32, LCD_WIDTH, LCD_HEIGHT));
   time_label.font(clock_text_font);
   time_label.color(uix_color_t::white);
-  time_label.text_justify(uix_justify::top_right);
+  time_label.text_justify(uix_justify::top_left);
   main_screen.register_control(time_label);
 
   temp_label.bounds(srect16(0, 0, LCD_WIDTH - 32, 10));
@@ -309,8 +300,7 @@ void setup() {
   lcd.active_screen(main_screen);
 
   fetch_data();
-}
 
-void loop() {
-  EVERY_N_MINUTES(1) { fetch_data(); }
+  xTaskCreatePinnedToCore(app_loop, "app", CONFIG_ESP_MAIN_TASK_STACK_SIZE,
+                          nullptr, 20, nullptr, 0);
 }
