@@ -44,6 +44,14 @@
 #include "sun_icon.hpp"
 #undef SUN_ICON_IMPLEMENTATION
 
+#define MOON_ICON_IMPLEMENTATION
+#include "moon_icon.hpp"
+#undef MOON_ICON_IMPLEMENTATION
+
+#define MOON_CLOUD_ICON_IMPLEMENTATION
+#include "moon_cloud_icon.hpp"
+#undef MOON_CLOUD_ICON_IMPLEMENTATION
+
 #define QUESTION_ICON_IMPLEMENTATION
 #include "question_icon.hpp"
 #undef QUESTION_ICON_IMPLEMENTATION
@@ -57,13 +65,8 @@
 #define OWM_COUNTRY "US"
 
 #define NTP_SERVER "pool.ntp.org"
-#define GMT_OFFSET -14400
-
-#define TEMP_HUE_COLD 150
-#define TEMP_HUE_HOT 10
-
-#define TEMP_COLD 32
-#define TEMP_HOT 100
+#define GMT_OFFSET -18000
+#define DST_OFFSET -3600
 
 using namespace gfx;
 using namespace uix;
@@ -143,10 +146,24 @@ void fetch_data() {
 
   uint8_t status_code = floor(data.weather.id / 100);
 
+  auto sunriseTime = Datime(data.sunrise + (GMT_OFFSET - DST_OFFSET));
+  auto sunsetTime = Datime(data.sunset + (GMT_OFFSET - DST_OFFSET));
+  auto sunriseSeconds = (sunriseTime.hour * 60 * 60) +
+                        (sunriseTime.minute * 60) + sunriseTime.second;
+  auto sunsetSeconds = (sunsetTime.hour * 60 * 60) + (sunsetTime.minute * 60) +
+                       sunsetTime.second;
+  auto timestampSeconds =
+      (timestamp.hour * 60 * 60) + (timestamp.minute * 60) + timestamp.second;
+
   if (status_code == 6) {
     weather_icon.image(snowflake_icon);
   } else if (!strcmp(data.weather.description, "few clouds")) {
-    weather_icon.image(clouds_sun_icon);
+    if (timestampSeconds >= sunriseSeconds &&
+        timestampSeconds <= sunsetSeconds) {
+      weather_icon.image(clouds_sun_icon);
+    } else {
+      weather_icon.image(moon_cloud_icon);
+    }
   } else if (!strcmp(data.weather.description, "scattered clouds")) {
     weather_icon.image(cloud_icon);
   } else if (!strcmp(data.weather.description, "broken clouds")) {
@@ -156,7 +173,12 @@ void fetch_data() {
   } else if (status_code == 2) {
     weather_icon.image(lightning_icon);
   } else if (status_code == 8) {
-    weather_icon.image(sun_icon);
+    if (timestampSeconds >= sunriseSeconds &&
+        timestampSeconds <= sunsetSeconds) {
+      weather_icon.image(sun_icon);
+    } else {
+      weather_icon.image(moon_icon);
+    }
   } else if (status_code == 7) {
     weather_icon.image(cloud_fog_icon);
   }
@@ -214,9 +236,8 @@ void setup() {
   weather.begin(OWM_API_KEY);
   weather.setUnits(OWM_UNITS_IMPERIAL);
   weather.setLanguage("en_us");
-  weather.setCacheDuration(0);
 
-  configTime(GMT_OFFSET, 0, NTP_SERVER);
+  configTime(GMT_OFFSET, DST_OFFSET, NTP_SERVER);
 
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
   main_screen.background_color(scr_color_t::black);
