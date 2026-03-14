@@ -1,5 +1,3 @@
-
-#include <Arduino.h>
 #include <Datime.h>
 #include <FastLED.h>
 #include <OpenWeatherMap.h>
@@ -131,7 +129,7 @@ label_t pres_label;
 icon_t weather_icon;
 
 void animate_label(bool state, bool rightAlign = false) {
-  srect16 bounds = srect16(time_label.bounds());
+  auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
 
   while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1) {
@@ -222,7 +220,11 @@ void fetch_data() {
   animate_label(true, true);
 }
 
-void setup() {
+void app_loop(void* params) {
+  EVERY_N_MINUTES(1) { fetch_data(); }
+}
+
+void app_main() {
   USBSerial.begin(115200);
 
   lcd_init();
@@ -298,8 +300,7 @@ void setup() {
   lcd.active_screen(main_screen);
 
   fetch_data();
-}
 
-void loop() {
-  EVERY_N_MINUTES(1) { fetch_data(); }
+  xTaskCreatePinnedToCore(app_loop, "app", CONFIG_ESP_MAIN_TASK_STACK_SIZE,
+                          nullptr, 20, nullptr, 0);
 }
