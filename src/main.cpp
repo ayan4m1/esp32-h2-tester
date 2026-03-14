@@ -76,6 +76,7 @@ static OpenWeatherMap weather;
 
 static const char* timeStr = " %02d:%02d";
 static const char* tempStr = "%6.1f °F";
+static const char* shortTempStr = "%.1f°F";
 static const char* presStr = "%6d mb";
 static const char* humeStr = "%6d %%RH";
 static const char* connectingStr = "Connecting...";
@@ -129,6 +130,27 @@ label_t hume_label;
 label_t pres_label;
 icon_t weather_icon;
 
+void animate_label(bool state) {
+  auto bounds = srect16(state ? LCD_WIDTH - 1 : 0, LCD_HEIGHT - 32, LCD_WIDTH,
+                        LCD_HEIGHT);
+  uint16_t x1 = bounds.x1;
+  uint16_t x2 = bounds.x2;
+
+  while (state ? x1-- > 0 : x1++ < LCD_WIDTH - 1) {
+    if (state) {
+      x2--;
+    } else {
+      x2++;
+    }
+
+    bounds.x1 = x1;
+    bounds.x2 = x2;
+    time_label.bounds(bounds);
+    lcd.update();
+    delayMicroseconds(8335);
+  }
+}
+
 void fetch_data() {
   OWM_CurrentWeather data;
   weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
@@ -140,6 +162,7 @@ void fetch_data() {
                           curTime.tm_hour, curTime.tm_min, curTime.tm_sec);
 
   static char thisTemp[15];
+  static char thisShortTemp[15];
   static char thisPres[15];
   static char thisTime[15];
   static char thisHume[15];
@@ -189,6 +212,7 @@ void fetch_data() {
   snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour,
            timestamp.minute);
   snprintf(thisHume, sizeof(thisHume), humeStr, data.main.humidity);
+  snprintf(thisShortTemp, sizeof(thisShortTemp), shortTempStr, data.main.temp);
 
   time_label.text(thisTime);
   pres_label.text(thisPres);
@@ -196,6 +220,17 @@ void fetch_data() {
   hume_label.text(thisHume);
 
   lcd.update();
+
+  // delay(5000);
+  // animate_label(false);
+  // time_label.text(thisShortTemp);
+  // time_label.text_justify(uix_justify::top_left);
+  // animate_label(true);
+  // delay(5000);
+  // animate_label(false);
+  // time_label.text(thisTime);
+  // time_label.text_justify(uix_justify::top_right);
+  // animate_label(true);
 }
 
 void setup() {
