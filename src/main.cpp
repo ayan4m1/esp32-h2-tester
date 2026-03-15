@@ -66,7 +66,7 @@
 
 #define NTP_SERVER "pool.ntp.org"
 #define GMT_OFFSET -18000
-#define DST_OFFSET -3600
+#define DST_OFFSET 3600
 
 using namespace gfx;
 using namespace uix;
@@ -169,8 +169,8 @@ void fetch_data() {
 
   uint8_t status_code = floor(data.weather.id / 100);
 
-  auto sunriseTime = Datime(data.sunrise + (GMT_OFFSET - DST_OFFSET));
-  auto sunsetTime = Datime(data.sunset + (GMT_OFFSET - DST_OFFSET));
+  auto sunriseTime = Datime(data.sunrise + (GMT_OFFSET + DST_OFFSET));
+  auto sunsetTime = Datime(data.sunset + (GMT_OFFSET + DST_OFFSET));
   auto sunriseSeconds = (sunriseTime.hour * 60 * 60) +
                         (sunriseTime.minute * 60) + sunriseTime.second;
   auto sunsetSeconds = (sunsetTime.hour * 60 * 60) + (sunsetTime.minute * 60) +
