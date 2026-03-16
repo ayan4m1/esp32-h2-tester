@@ -1,6 +1,6 @@
-#include <Datime.h>
-#include <FastLED.h>
-#include <OpenWeatherMap.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <roo_time.h>
 // display configuration is below:
 #include "display.h"
 #include "gfx.hpp"
@@ -63,14 +63,17 @@
 #define OWM_COUNTRY "US"
 
 #define NTP_SERVER "pool.ntp.org"
-#define GMT_OFFSET -18000
-#define DST_OFFSET 3600
+// #define GMT_OFFSET -18000
+// #define DST_OFFSET 3600
 
 using namespace gfx;
 using namespace uix;
+using namespace roo_time;
+
+static const TimeZone TZ(Hours(-4));
 
 static uix::display lcd;
-static OpenWeatherMap weather;
+// static OpenWeatherMap weather;
 
 static const char* timeStr = " %02d:%02d";
 static const char* tempStr = "%6.1f °F";
@@ -104,21 +107,16 @@ using scr_color_t = color<screen_t::pixel_type>;
 using uix_color_t = color<uix_pixel>;
 
 static tt_font small_text_font(telegrama, 10, font_size_units::px);
-
 static tt_font large_text_font(telegrama, 14, font_size_units::px);
-
 static tt_font clock_text_font(telegrama, 28, font_size_units::px);
 
 static screen_t main_screen;
-
 static screen_t loading_screen;
 
 // each control has a "control surface" derived from a type indicated by the
 // screen:
 using label_t = uix::label<screen_t::control_surface_type>;
-
 using icon_t = uix::image_box<screen_t::control_surface_type>;
-
 using vlabel_t = uix::vlabel<screen_t::control_surface_type>;
 
 label_t loading_label;
@@ -136,19 +134,26 @@ void animate_label(bool state, bool rightAlign = false) {
     bounds.x1 = x1;
     time_label.bounds(bounds);
     lcd.update();
-    delayMicroseconds(8335);
+    vTaskDelay(8335 / portTICK_PERIOD_MS);
   }
 }
 
+tm unixToTm(unsigned long timestamp) {
+  time_t time = static_cast<time_t>(timestamp);
+  return *localtime(&time);
+}
+
 void fetch_data() {
-  OWM_CurrentWeather data;
-  weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
+  // OWM_CurrentWeather data;
+  // weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
 
-  struct tm curTime;
-  getLocalTime(&curTime);
+  time_t now;
+  time(&now);
+  struct tm curTime = unixToTm(now);
 
-  auto timestamp = Datime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
-                          curTime.tm_hour, curTime.tm_min, curTime.tm_sec);
+  auto timestamp =
+      DateTime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
+               curTime.tm_hour, curTime.tm_min, curTime.tm_sec, 0, TZ);
 
   static char thisTemp[15];
   static char thisShortTemp[15];
@@ -158,14 +163,14 @@ void fetch_data() {
 
   uint8_t status_code = floor(data.weather.id / 100);
 
-  auto sunriseTime = Datime(data.sunrise + (GMT_OFFSET + DST_OFFSET));
-  auto sunsetTime = Datime(data.sunset + (GMT_OFFSET + DST_OFFSET));
-  auto sunriseSeconds = (sunriseTime.hour * 60 * 60) +
-                        (sunriseTime.minute * 60) + sunriseTime.second;
-  auto sunsetSeconds = (sunsetTime.hour * 60 * 60) + (sunsetTime.minute * 60) +
-                       sunsetTime.second;
-  auto timestampSeconds =
-      (timestamp.hour * 60 * 60) + (timestamp.minute * 60) + timestamp.second;
+  auto sunriseTime = DateTime(data.sunrise, TZ);
+  auto sunsetTime = DateTime(data.sunset, TZ);
+  auto sunriseSeconds = (sunriseTime.hour() * 60 * 60) +
+                        (sunriseTime.minute() * 60) + sunriseTime.second();
+  auto sunsetSeconds = (sunsetTime.hour() * 60 * 60) +
+                       (sunsetTime.minute() * 60) + sunsetTime.second();
+  auto timestampSeconds = (timestamp.hour() * 60 * 60) +
+                          (timestamp.minute() * 60) + timestamp.second();
 
   if (status_code == 6) {
     weather_icon.image(snowflake_icon);
@@ -198,8 +203,8 @@ void fetch_data() {
 
   snprintf(thisTemp, sizeof(thisTemp), tempStr, data.main.temp);
   snprintf(thisPres, sizeof(thisPres), presStr, data.main.pressure);
-  snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour,
-           timestamp.minute);
+  snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour(),
+           timestamp.minute());
   snprintf(thisHume, sizeof(thisHume), humeStr, data.main.humidity);
   snprintf(thisShortTemp, sizeof(thisShortTemp), shortTempStr, data.main.temp);
 
@@ -210,23 +215,22 @@ void fetch_data() {
 
   lcd.update();
 
-  delay(5000);
+  vTaskDelay(5000 / portTICK_PERIOD_MS);
   animate_label(false);
   time_label.text(thisShortTemp);
   animate_label(true);
-  delay(5000);
+  vTaskDelay(5000 / portTICK_PERIOD_MS);
   animate_label(false);
   time_label.text(thisTime);
   animate_label(true, true);
 }
 
 void app_loop(void* params) {
-  EVERY_N_MINUTES(1) { fetch_data(); }
+  vTaskDelay(60000 / portTICK_PERIOD_MS);
+  fetch_data();
 }
 
 void app_main() {
-  USBSerial.begin(115200);
-
   lcd_init();
 
   lcd.buffer_size(LCD_TRANSFER_SIZE);
@@ -252,19 +256,19 @@ void app_main() {
   lcd.active_screen(loading_screen);
   lcd.update();
 
-  WiFi.begin(WIFI_SSID, WIFI_PSK);
-  while (!WiFi.isConnected()) {
-    delay(1000);
-  }
+  // WiFi.begin(WIFI_SSID, WIFI_PSK);
+  // while (!WiFi.isConnected()) {
+  //   delay(1000);
+  // }
 
   loading_label.text(fetchingStr);
   lcd.update();
 
-  weather.begin(OWM_API_KEY);
-  weather.setUnits(OWM_UNITS_IMPERIAL);
-  weather.setLanguage("en_us");
+  // weather.begin(OWM_API_KEY);
+  // weather.setUnits(OWM_UNITS_IMPERIAL);
+  // weather.setLanguage("en_us");
 
-  configTime(GMT_OFFSET, DST_OFFSET, NTP_SERVER);
+  // configTime(GMT_OFFSET, DST_OFFSET, NTP_SERVER);
 
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
   main_screen.background_color(scr_color_t::black);
