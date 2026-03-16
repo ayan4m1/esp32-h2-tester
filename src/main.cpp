@@ -233,8 +233,13 @@ void fetch_data() {
 }
 
 void app_loop(void* params) {
-  vTaskDelay(60000 / portTICK_PERIOD_MS);
+  uint32_t started = pdTICKS_TO_MS(xTaskGetTickCount());
+
   fetch_data();
+
+  uint16_t elapsed = pdTICKS_TO_MS(xTaskGetTickCount()) - started;
+
+  vTaskDelay((60000 - elapsed) / portTICK_PERIOD_MS);
 }
 
 void app_main() {
