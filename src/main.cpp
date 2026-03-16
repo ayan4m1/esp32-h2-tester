@@ -1,6 +1,11 @@
+#include <esp_http_client.h>
+#include <esp_netif_sntp.h>
+#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <roo_time.h>
+
+#include <wifi_manager.hpp>
 // display configuration is below:
 #include "display.h"
 #include "gfx.hpp"
@@ -69,10 +74,12 @@
 using namespace gfx;
 using namespace uix;
 using namespace roo_time;
+using namespace esp_idf;
 
 static const TimeZone TZ(Hours(-4));
 
 static uix::display lcd;
+static wifi_manager wifi;
 // static OpenWeatherMap weather;
 
 static const char* timeStr = " %02d:%02d";
@@ -256,19 +263,13 @@ void app_main() {
   lcd.active_screen(loading_screen);
   lcd.update();
 
-  // WiFi.begin(WIFI_SSID, WIFI_PSK);
-  // while (!WiFi.isConnected()) {
-  //   delay(1000);
-  // }
+  wifi.connect(WIFI_SSID, WIFI_PSK);
 
   loading_label.text(fetchingStr);
   lcd.update();
 
-  // weather.begin(OWM_API_KEY);
-  // weather.setUnits(OWM_UNITS_IMPERIAL);
-  // weather.setLanguage("en_us");
-
-  // configTime(GMT_OFFSET, DST_OFFSET, NTP_SERVER);
+  esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
+  esp_netif_sntp_init(&config);
 
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
   main_screen.background_color(scr_color_t::black);
