@@ -3,12 +3,14 @@
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <htcw_json.h>
 #include <roo_time.h>
 
 #include <wifi_manager.hpp>
-// display configuration is below:
+
 #include "display.h"
 #include "gfx.hpp"
+#include "http_stream.hpp"
 #include "uix.hpp"
 
 #define TELEGRAMA_IMPLEMENTATION
@@ -62,10 +64,9 @@
 #define WIFI_SSID "qux"
 #define WIFI_PSK "changeme"
 
-#define OWM_API_KEY "changeme"
-
-#define OWM_CITY "Philadelphia, PA"
-#define OWM_COUNTRY "US"
+#define OWM_API_URL               \
+  "http://api.weatherapi.com/v1/" \
+  "current.json?key=changeme&aqi=no&units=imperial&q=Philadelphia%20,PA%20USA"
 
 #define NTP_SERVER "pool.ntp.org"
 // #define GMT_OFFSET -18000
@@ -75,6 +76,7 @@ using namespace gfx;
 using namespace uix;
 using namespace roo_time;
 using namespace esp_idf;
+using namespace json;
 
 static const TimeZone TZ(Hours(-4));
 
@@ -151,8 +153,62 @@ tm unixToTm(unsigned long timestamp) {
 }
 
 void fetch_data() {
-  // OWM_CurrentWeather data;
-  // weather.getCurrentWeatherByCity(OWM_CITY, OWM_COUNTRY, &data);
+  http_handle_t handle = http_init(OWM_API_URL);
+  int status = http_read_status_and_headers(handle);
+
+  if (status < 200 || status > 299) {
+    // HTTP error
+    return;
+  }
+
+  enum { J_START = 0, J_CURRENT, J_CURRENT_WEATHER };
+
+  http_stream stream(handle);
+  json_reader_ex<64> reader(stream);
+  char weather_desc[40];
+  int sunrise, sunset, pressure, weather_id;
+  float temp, humidity;
+  int state = J_START;
+
+  while (reader.read()) {
+    if (reader.depth() == 1) {
+      if (reader.node_type() == json_node_type::field &&
+          !strcmp("current", reader.value())) {
+        state = J_CURRENT;
+      }
+    } else {
+      if (state == J_CURRENT) {
+        if (reader.node_type() == json_node_type::object &&
+            !strcmp("weather", reader.value())) {
+          state = J_CURRENT_WEATHER;
+        } else if (reader.node_type() != json_node_type::field) {
+          continue;
+        }
+
+        if (!strcmp("sunrise", reader.value()) && reader.read()) {
+          sunrise = reader.value_int();
+        } else if (!strcmp("sunset", reader.value()) && reader.read()) {
+          sunset = reader.value_int();
+        } else if (!strcmp("temp", reader.value()) && reader.read()) {
+          temp = reader.value_real();
+        } else if (!strcmp("pressure", reader.value()) && reader.read()) {
+          pressure = reader.value_int();
+        } else if (!strcmp("humidity", reader.value()) && reader.read()) {
+          humidity = reader.value_real();
+        }
+      } else if (state == J_CURRENT_WEATHER) {
+        if (reader.node_type() != json_node_type::field) {
+          continue;
+        }
+
+        if (!strcmp("id", reader.value()) && reader.read()) {
+          weather_id = reader.value_int();
+        } else if (!strcmp("description", reader.value()) && reader.read()) {
+          strcpy(weather_desc, reader.value());
+        }
+      }
+    }
+  }
 
   time_t now;
   time(&now);
@@ -168,10 +224,10 @@ void fetch_data() {
   static char thisTime[15];
   static char thisHume[15];
 
-  uint8_t status_code = floor(data.weather.id / 100);
+  uint8_t status_code = floor(weather_id / 100);
 
-  auto sunriseTime = DateTime(data.sunrise, TZ);
-  auto sunsetTime = DateTime(data.sunset, TZ);
+  auto sunriseTime = DateTime(unixToTm(sunrise), TZ);
+  auto sunsetTime = DateTime(unixToTm(sunset), TZ);
   auto sunriseSeconds = (sunriseTime.hour() * 60 * 60) +
                         (sunriseTime.minute() * 60) + sunriseTime.second();
   auto sunsetSeconds = (sunsetTime.hour() * 60 * 60) +
@@ -181,17 +237,17 @@ void fetch_data() {
 
   if (status_code == 6) {
     weather_icon.image(snowflake_icon);
-  } else if (!strcmp(data.weather.description, "few clouds")) {
+  } else if (!strcmp(weather_desc, "few clouds")) {
     if (timestampSeconds >= sunriseSeconds &&
         timestampSeconds <= sunsetSeconds) {
       weather_icon.image(clouds_sun_icon);
     } else {
       weather_icon.image(moon_cloud_icon);
     }
-  } else if (!strcmp(data.weather.description, "scattered clouds")) {
+  } else if (!strcmp(weather_desc, "scattered clouds")) {
     weather_icon.image(cloud_icon);
-  } else if (!strcmp(data.weather.description, "broken clouds") ||
-             !strcmp(data.weather.description, "overcast clouds")) {
+  } else if (!strcmp(weather_desc, "broken clouds") ||
+             !strcmp(weather_desc, "overcast clouds")) {
     weather_icon.image(clouds_icon);
   } else if (status_code == 5 || status_code == 3) {
     weather_icon.image(cloud_rain_icon);
@@ -208,12 +264,12 @@ void fetch_data() {
     weather_icon.image(cloud_fog_icon);
   }
 
-  snprintf(thisTemp, sizeof(thisTemp), tempStr, data.main.temp);
-  snprintf(thisPres, sizeof(thisPres), presStr, data.main.pressure);
+  snprintf(thisTemp, sizeof(thisTemp), tempStr, temp);
+  snprintf(thisPres, sizeof(thisPres), presStr, pressure);
   snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour(),
            timestamp.minute());
-  snprintf(thisHume, sizeof(thisHume), humeStr, data.main.humidity);
-  snprintf(thisShortTemp, sizeof(thisShortTemp), shortTempStr, data.main.temp);
+  snprintf(thisHume, sizeof(thisHume), humeStr, humidity);
+  snprintf(thisShortTemp, sizeof(thisShortTemp), shortTempStr, temp);
 
   time_label.text(thisTime);
   pres_label.text(thisPres);
