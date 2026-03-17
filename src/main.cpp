@@ -84,13 +84,25 @@ static uix::display lcd;
 static wifi_manager wifi;
 // static OpenWeatherMap weather;
 
-static const char* timeStr = " %02d:%02d";
-static const char* tempStr = "%6.1f °F";
-static const char* shortTempStr = "%.1f°F";
-static const char* presStr = "%6d mb";
-static const char* humeStr = "%6d %%RH";
-static const char* connectingStr = "Connecting...";
-static const char* fetchingStr = "Fetching...";
+static const char* time_format_string = " %02d:%02d";
+static const char* temp_format_string = "%6.1f °F";
+static const char* short_temp_format_string = "%.1f°F";
+static const char* pres_format_string = "%6d mb";
+static const char* hume_format_string = "%6d %%RH";
+static const char* connecting_format_string = "Connecting...";
+static const char* fetching_format_string = "Fetching...";
+
+// to hold API response data
+static char weather_desc[40];
+static int sunrise, sunset, pressure, weather_id;
+static float temp, humidity;
+
+// to hold strings formatted for display
+static char temp_text[15];
+static char short_temp_text[15];
+static char pres_text[15];
+static char time_text[15];
+static char hume_text[15];
 
 void lcd_flush_complete(void) {
   // let UIX know the DMA transfer completed
@@ -165,9 +177,6 @@ void fetch_data() {
 
   http_stream stream(handle);
   json_reader_ex<64> reader(stream);
-  char weather_desc[40];
-  int sunrise, sunset, pressure, weather_id;
-  float temp, humidity;
   int state = J_START;
 
   while (reader.read()) {
@@ -218,12 +227,6 @@ void fetch_data() {
       DateTime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
                curTime.tm_hour, curTime.tm_min, curTime.tm_sec, 0, TZ);
 
-  static char thisTemp[15];
-  static char thisShortTemp[15];
-  static char thisPres[15];
-  static char thisTime[15];
-  static char thisHume[15];
-
   uint8_t status_code = floor(weather_id / 100);
 
   auto sunriseTime = DateTime(unixToTm(sunrise), TZ);
@@ -264,27 +267,28 @@ void fetch_data() {
     weather_icon.image(cloud_fog_icon);
   }
 
-  snprintf(thisTemp, sizeof(thisTemp), tempStr, temp);
-  snprintf(thisPres, sizeof(thisPres), presStr, pressure);
-  snprintf(thisTime, sizeof(thisTime), timeStr, timestamp.hour(),
+  snprintf(temp_text, sizeof(temp_text), temp_format_string, temp);
+  snprintf(pres_text, sizeof(pres_text), pres_format_string, pressure);
+  snprintf(time_text, sizeof(time_text), time_format_string, timestamp.hour(),
            timestamp.minute());
-  snprintf(thisHume, sizeof(thisHume), humeStr, humidity);
-  snprintf(thisShortTemp, sizeof(thisShortTemp), shortTempStr, temp);
+  snprintf(hume_text, sizeof(hume_text), hume_format_string, humidity);
+  snprintf(short_temp_text, sizeof(short_temp_text), short_temp_format_string,
+           temp);
 
-  time_label.text(thisTime);
-  pres_label.text(thisPres);
-  temp_label.text(thisTemp);
-  hume_label.text(thisHume);
+  time_label.text(time_text);
+  pres_label.text(pres_text);
+  temp_label.text(temp_text);
+  hume_label.text(hume_text);
 
   lcd.update();
 
   vTaskDelay(5000 / portTICK_PERIOD_MS);
   animate_label(false);
-  time_label.text(thisShortTemp);
+  time_label.text(short_temp_text);
   animate_label(true);
   vTaskDelay(5000 / portTICK_PERIOD_MS);
   animate_label(false);
-  time_label.text(thisTime);
+  time_label.text(time_text);
   animate_label(true, true);
 }
 
@@ -316,7 +320,7 @@ void app_main() {
   loading_label.bounds(srect16(0, 0, LCD_WIDTH, LCD_HEIGHT));
   loading_label.font(large_text_font);
   loading_label.color(uix_color_t::white);
-  loading_label.text(connectingStr);
+  loading_label.text(connecting_format_string);
   loading_label.text_justify(uix_justify::center);
 
   loading_screen.register_control(loading_label);
@@ -326,7 +330,7 @@ void app_main() {
 
   wifi.connect(WIFI_SSID, WIFI_PSK);
 
-  loading_label.text(fetchingStr);
+  loading_label.text(fetching_format_string);
   lcd.update();
 
   esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
