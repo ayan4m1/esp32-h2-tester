@@ -69,8 +69,6 @@
   "current.json?key=changeme&aqi=no&units=imperial&q=Philadelphia%20,PA%20USA"
 
 #define NTP_SERVER "pool.ntp.org"
-// #define GMT_OFFSET -18000
-// #define DST_OFFSET 3600
 
 using namespace gfx;
 using namespace uix;
@@ -302,6 +300,7 @@ void app_loop(void* params) {
   vTaskDelay((60000 - elapsed) / portTICK_PERIOD_MS);
 }
 
+extern "C" {
 void app_main() {
   lcd_init();
 
@@ -373,4 +372,5 @@ void app_main() {
 
   xTaskCreatePinnedToCore(app_loop, "app", CONFIG_ESP_MAIN_TASK_STACK_SIZE,
                           nullptr, 20, nullptr, 0);
+}
 }
