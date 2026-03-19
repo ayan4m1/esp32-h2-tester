@@ -1,0 +1,28 @@
+{
+  "location": {
+    "name": "Philadelphia",
+    "region": "Pennsylvania",
+    "country": "United States of America",
+    "lat": 39.9522,
+    "lon": -75.1642,
+    "tz_id": "America/New_York",
+    "localtime_epoch": 1773934296,
+    "localtime": "2026-03-19 11:31"
+  },
+  "current": {
+    "last_updated_epoch": 1773934200,
+    "temp_c": 4.4,
+    "is_day": 1,
+    "condition": { "text": "Partly cloudy" },
+    "wind_kph": 10.4,
+    "wind_degree": 186,
+    "wind_dir": "S",
+    "pressure_mb": 1026.0,
+    "precip_mm": 0.0,
+    "humidity": 57,
+    "cloud": 75,
+    "feelslike_c": 1.9,
+    "vis_km": 16.0,
+    "gust_kph": 12.0
+  }
+}
