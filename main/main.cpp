@@ -81,13 +81,13 @@ static uix::display lcd;
 static wifi_manager wifi;
 // static OpenWeatherMap weather;
 
-static const char* time_format_string = " %02d:%02d";
-static const char* temp_format_string = "%6.1f °F";
-static const char* short_temp_format_string = "%.1f°F";
-static const char* pres_format_string = "%6d mb";
-static const char* hume_format_string = "%6d %%RH";
-static const char* connecting_format_string = "Connecting...";
-static const char* fetching_format_string = "Fetching...";
+static const char *time_format_string = " %02d:%02d";
+static const char *temp_format_string = "%6.1f °F";
+static const char *short_temp_format_string = "%.1f°F";
+static const char *pres_format_string = "%6d mb";
+static const char *hume_format_string = "%6d %%RH";
+static const char *connecting_format_string = "Connecting...";
+static const char *fetching_format_string = "Fetching...";
 
 // to hold API response data
 static char weather_desc[40];
@@ -101,13 +101,15 @@ static char pres_text[15];
 static char time_text[15];
 static char hume_text[15];
 
-void lcd_flush_complete(void) {
+void lcd_flush_complete(void)
+{
   // let UIX know the DMA transfer completed
   lcd.flush_complete();
 }
-static void uix_flush(const rect16& bounds, const void* bitmap, void* state) {
+static void uix_flush(const rect16 &bounds, const void *bitmap, void *state)
+{
   // similar to LVGL
-  lcd_flush(bounds.x1, bounds.y1, bounds.x2, bounds.y2, (void*)bitmap);
+  lcd_flush(bounds.x1, bounds.y1, bounds.x2, bounds.y2, (void *)bitmap);
 }
 #if LCD_COLOR_SPACE == LCD_COLOR_GSC
 #define PIXEL gsc_pixel<LCD_BIT_DEPTH>
@@ -144,11 +146,13 @@ label_t hume_label;
 label_t pres_label;
 icon_t weather_icon;
 
-void animate_label(bool state, bool rightAlign = false) {
+void animate_label(bool state, bool rightAlign = false)
+{
   auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
 
-  while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1) {
+  while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1)
+  {
     bounds.x1 = x1;
     time_label.bounds(bounds);
     lcd.update();
@@ -156,60 +160,92 @@ void animate_label(bool state, bool rightAlign = false) {
   }
 }
 
-tm unixToTm(unsigned long timestamp) {
+tm unixToTm(unsigned long timestamp)
+{
   time_t time = static_cast<time_t>(timestamp);
   return *localtime(&time);
 }
 
-void fetch_data() {
+void fetch_data()
+{
   http_handle_t handle = http_init(OWM_API_URL);
   int status = http_read_status_and_headers(handle);
 
-  if (status < 200 || status > 299) {
+  if (status < 200 || status > 299)
+  {
     // HTTP error
     return;
   }
 
-  enum { J_START = 0, J_CURRENT, J_CURRENT_WEATHER };
+  enum
+  {
+    J_START = 0,
+    J_CURRENT,
+    J_CURRENT_WEATHER
+  };
 
   http_stream stream(handle);
   json_reader_ex<64> reader(stream);
   int state = J_START;
 
-  while (reader.read()) {
-    if (reader.depth() == 1) {
+  while (reader.read())
+  {
+    if (reader.depth() == 1)
+    {
       if (reader.node_type() == json_node_type::field &&
-          !strcmp("current", reader.value())) {
+          !strcmp("current", reader.value()))
+      {
         state = J_CURRENT;
       }
-    } else {
-      if (state == J_CURRENT) {
+    }
+    else
+    {
+      if (state == J_CURRENT)
+      {
         if (reader.node_type() == json_node_type::object &&
-            !strcmp("weather", reader.value())) {
+            !strcmp("weather", reader.value()))
+        {
           state = J_CURRENT_WEATHER;
-        } else if (reader.node_type() != json_node_type::field) {
+        }
+        else if (reader.node_type() != json_node_type::field)
+        {
           continue;
         }
 
-        if (!strcmp("sunrise", reader.value()) && reader.read()) {
+        if (!strcmp("sunrise", reader.value()) && reader.read())
+        {
           sunrise = reader.value_int();
-        } else if (!strcmp("sunset", reader.value()) && reader.read()) {
+        }
+        else if (!strcmp("sunset", reader.value()) && reader.read())
+        {
           sunset = reader.value_int();
-        } else if (!strcmp("temp", reader.value()) && reader.read()) {
+        }
+        else if (!strcmp("temp", reader.value()) && reader.read())
+        {
           temp = reader.value_real();
-        } else if (!strcmp("pressure", reader.value()) && reader.read()) {
+        }
+        else if (!strcmp("pressure", reader.value()) && reader.read())
+        {
           pressure = reader.value_int();
-        } else if (!strcmp("humidity", reader.value()) && reader.read()) {
+        }
+        else if (!strcmp("humidity", reader.value()) && reader.read())
+        {
           humidity = reader.value_real();
         }
-      } else if (state == J_CURRENT_WEATHER) {
-        if (reader.node_type() != json_node_type::field) {
+      }
+      else if (state == J_CURRENT_WEATHER)
+      {
+        if (reader.node_type() != json_node_type::field)
+        {
           continue;
         }
 
-        if (!strcmp("id", reader.value()) && reader.read()) {
+        if (!strcmp("id", reader.value()) && reader.read())
+        {
           weather_id = reader.value_int();
-        } else if (!strcmp("description", reader.value()) && reader.read()) {
+        }
+        else if (!strcmp("description", reader.value()) && reader.read())
+        {
           strcpy(weather_desc, reader.value());
         }
       }
@@ -232,32 +268,53 @@ void fetch_data() {
   auto timestampSeconds = (timestamp.tm_hour * 60 * 60) +
                           (timestamp.tm_min * 60) + timestamp.tm_sec;
 
-  if (status_code == 6) {
+  if (status_code == 6)
+  {
     weather_icon.image(snowflake_icon);
-  } else if (!strcmp(weather_desc, "few clouds")) {
+  }
+  else if (!strcmp(weather_desc, "few clouds"))
+  {
     if (timestampSeconds >= sunriseSeconds &&
-        timestampSeconds <= sunsetSeconds) {
+        timestampSeconds <= sunsetSeconds)
+    {
       weather_icon.image(clouds_sun_icon);
-    } else {
+    }
+    else
+    {
       weather_icon.image(moon_cloud_icon);
     }
-  } else if (!strcmp(weather_desc, "scattered clouds")) {
+  }
+  else if (!strcmp(weather_desc, "scattered clouds"))
+  {
     weather_icon.image(cloud_icon);
-  } else if (!strcmp(weather_desc, "broken clouds") ||
-             !strcmp(weather_desc, "overcast clouds")) {
+  }
+  else if (!strcmp(weather_desc, "broken clouds") ||
+           !strcmp(weather_desc, "overcast clouds"))
+  {
     weather_icon.image(clouds_icon);
-  } else if (status_code == 5 || status_code == 3) {
+  }
+  else if (status_code == 5 || status_code == 3)
+  {
     weather_icon.image(cloud_rain_icon);
-  } else if (status_code == 2) {
+  }
+  else if (status_code == 2)
+  {
     weather_icon.image(lightning_icon);
-  } else if (status_code == 8) {
+  }
+  else if (status_code == 8)
+  {
     if (timestampSeconds >= sunriseSeconds &&
-        timestampSeconds <= sunsetSeconds) {
+        timestampSeconds <= sunsetSeconds)
+    {
       weather_icon.image(sun_icon);
-    } else {
+    }
+    else
+    {
       weather_icon.image(moon_icon);
     }
-  } else if (status_code == 7) {
+  }
+  else if (status_code == 7)
+  {
     weather_icon.image(cloud_fog_icon);
   }
 
@@ -286,7 +343,8 @@ void fetch_data() {
   animate_label(true, true);
 }
 
-void app_loop(void* params) {
+void app_loop(void *params)
+{
   uint32_t started = pdTICKS_TO_MS(xTaskGetTickCount());
 
   fetch_data();
@@ -296,13 +354,13 @@ void app_loop(void* params) {
   vTaskDelay((60000 - elapsed) / portTICK_PERIOD_MS);
 }
 
-extern "C" 
-void app_main() {
+extern "C" void app_main()
+{
   lcd_init();
 
   lcd.buffer_size(LCD_TRANSFER_SIZE);
-  lcd.buffer1((uint8_t*)lcd_buffer1());
-  lcd.buffer2((uint8_t*)lcd_buffer2());
+  lcd.buffer1((uint8_t *)lcd_buffer1());
+  lcd.buffer2((uint8_t *)lcd_buffer2());
   lcd.on_flush_callback(uix_flush);
 
   small_text_font.initialize();
