@@ -265,8 +265,8 @@ void fetch_data()
                         (sunriseTime.tm_min * 60) + sunriseTime.tm_sec;
   auto sunsetSeconds = (sunsetTime.tm_hour * 60 * 60) +
                        (sunsetTime.tm_min * 60) + sunsetTime.tm_sec;
-  auto timestampSeconds = (timestamp.tm_hour * 60 * 60) +
-                          (timestamp.tm_min * 60) + timestamp.tm_sec;
+  auto timestampSeconds = (curTime.tm_hour * 60 * 60) +
+                          (curTime.tm_min * 60) + curTime.tm_sec;
 
   if (status_code == 6)
   {
@@ -320,8 +320,8 @@ void fetch_data()
 
   snprintf(temp_text, sizeof(temp_text), temp_format_string, temp);
   snprintf(pres_text, sizeof(pres_text), pres_format_string, pressure);
-  snprintf(time_text, sizeof(time_text), time_format_string, timestamp.hour(),
-           timestamp.minute());
+  snprintf(time_text, sizeof(time_text), time_format_string, curTime.tm_hour,
+           curTime.tm_min);
   snprintf(hume_text, sizeof(hume_text), hume_format_string, humidity);
   snprintf(short_temp_text, sizeof(short_temp_text), short_temp_format_string,
            temp);
@@ -382,6 +382,10 @@ extern "C" void app_main()
   lcd.update();
 
   wifi.connect(WIFI_SSID, WIFI_PSK);
+  while (wifi.state() != wifi_manager_state::connected)
+  {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
 
   loading_label.text(fetching_format_string);
   lcd.update();
