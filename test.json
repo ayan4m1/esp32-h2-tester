@@ -1,28 +1,32 @@
 {
-  "location": {
-    "name": "Philadelphia",
-    "region": "Pennsylvania",
-    "country": "United States of America",
-    "lat": 39.9522,
-    "lon": -75.1642,
-    "tz_id": "America/New_York",
-    "localtime_epoch": 1773934296,
-    "localtime": "2026-03-19 11:31"
+  "coord": { "lon": -75.1449, "lat": 40.1223 },
+  "weather": [
+    { "id": 800, "main": "Clear", "description": "clear sky", "icon": "01d" }
+  ],
+  "base": "stations",
+  "main": {
+    "temp": 48.09,
+    "feels_like": 46.24,
+    "temp_min": 46.74,
+    "temp_max": 50.18,
+    "pressure": 1021,
+    "humidity": 49,
+    "sea_level": 1021,
+    "grnd_level": 1013
   },
-  "current": {
-    "last_updated_epoch": 1773934200,
-    "temp_c": 4.4,
-    "is_day": 1,
-    "condition": { "text": "Partly cloudy" },
-    "wind_kph": 10.4,
-    "wind_degree": 186,
-    "wind_dir": "S",
-    "pressure_mb": 1026.0,
-    "precip_mm": 0.0,
-    "humidity": 57,
-    "cloud": 75,
-    "feelslike_c": 1.9,
-    "vis_km": 16.0,
-    "gust_kph": 12.0
-  }
+  "visibility": 10000,
+  "wind": { "speed": 4.61, "deg": 220 },
+  "clouds": { "all": 0 },
+  "dt": 1773954370,
+  "sys": {
+    "type": 2,
+    "id": 2010726,
+    "country": "US",
+    "sunrise": 1773918342,
+    "sunset": 1773961859
+  },
+  "timezone": -14400,
+  "id": 5191327,
+  "name": "Glenside",
+  "cod": 200
 }
