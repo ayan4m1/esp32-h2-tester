@@ -4,7 +4,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <htcw_json.h>
-#include <roo_time.h>
 
 #include <wifi_manager.hpp>
 
@@ -70,13 +69,13 @@
 
 #define NTP_SERVER "pool.ntp.org"
 
+#define UTC_OFFSET -18000
+#define DST_OFFSET 3600
+
 using namespace gfx;
 using namespace uix;
-using namespace roo_time;
 using namespace esp_idf;
 using namespace json;
-
-static const TimeZone TZ(Hours(-4));
 
 static uix::display lcd;
 static wifi_manager wifi;
@@ -219,22 +218,19 @@ void fetch_data() {
 
   time_t now;
   time(&now);
-  struct tm curTime = unixToTm(now);
 
-  auto timestamp =
-      DateTime(curTime.tm_year, curTime.tm_mon, curTime.tm_mday,
-               curTime.tm_hour, curTime.tm_min, curTime.tm_sec, 0, TZ);
+  struct tm curTime = unixToTm(now);
+  struct tm sunriseTime = unixToTm(sunrise - DST_OFFSET);
+  struct tm sunsetTime = unixToTm(sunset - DST_OFFSET);
 
   uint8_t status_code = floor(weather_id / 100);
 
-  auto sunriseTime = DateTime(unixToTm(sunrise), TZ);
-  auto sunsetTime = DateTime(unixToTm(sunset), TZ);
-  auto sunriseSeconds = (sunriseTime.hour() * 60 * 60) +
-                        (sunriseTime.minute() * 60) + sunriseTime.second();
-  auto sunsetSeconds = (sunsetTime.hour() * 60 * 60) +
-                       (sunsetTime.minute() * 60) + sunsetTime.second();
-  auto timestampSeconds = (timestamp.hour() * 60 * 60) +
-                          (timestamp.minute() * 60) + timestamp.second();
+  auto sunriseSeconds = (sunriseTime.tm_hour * 60 * 60) +
+                        (sunriseTime.tm_min * 60) + sunriseTime.tm_sec;
+  auto sunsetSeconds = (sunsetTime.tm_hour * 60 * 60) +
+                       (sunsetTime.tm_min * 60) + sunsetTime.tm_sec;
+  auto timestampSeconds = (timestamp.tm_hour * 60 * 60) +
+                          (timestamp.tm_min * 60) + timestamp.tm_sec;
 
   if (status_code == 6) {
     weather_icon.image(snowflake_icon);
