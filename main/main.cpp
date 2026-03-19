@@ -202,7 +202,7 @@ void fetch_data()
     {
       if (state == J_CURRENT)
       {
-        if (reader.node_type() == json_node_type::object &&
+        if (reader.node_type() == json_node_type::field &&
             !strcmp("weather", reader.value()))
         {
           state = J_CURRENT_WEATHER;
@@ -251,6 +251,8 @@ void fetch_data()
       }
     }
   }
+
+  http_end(handle);
 
   time_t now;
   time(&now);
@@ -331,7 +333,11 @@ void fetch_data()
   temp_label.text(temp_text);
   hume_label.text(hume_text);
 
-  lcd.update();
+  while (lcd.dirty())
+  {
+    lcd.update();
+    portYIELD();
+  }
 
   vTaskDelay(5000 / portTICK_PERIOD_MS);
   animate_label(false);
