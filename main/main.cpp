@@ -63,9 +63,7 @@
 #define WIFI_SSID "qux"
 #define WIFI_PSK "changeme"
 
-#define OWM_API_URL               \
-  "http://api.weatherapi.com/v1/" \
-  "current.json?key=changeme&aqi=no&units=imperial&q=Philadelphia%20,PA%20USA"
+#define OWM_API_URL "http://api.openweathermap.org/data/2.5/weather?lat=40.12225&lon=-75.14492&appid=changeme"
 
 #define NTP_SERVER "pool.ntp.org"
 
@@ -91,8 +89,8 @@ static const char *fetching_format_string = "Fetching...";
 
 // to hold API response data
 static char weather_desc[40];
-static int sunrise, sunset, pressure, weather_id;
-static float temp, humidity;
+static int sunrise, sunset, pressure, weather_id, humidity;
+static float temp;
 
 // to hold strings formatted for display
 static char temp_text[15];
@@ -174,14 +172,16 @@ void fetch_data()
   if (status < 200 || status > 299)
   {
     // HTTP error
+    puts("HTTP error!\n");
     return;
   }
 
   enum
   {
     J_START = 0,
-    J_CURRENT,
-    J_CURRENT_WEATHER
+    J_MAIN,
+    J_WEATHER,
+    J_SYS
   };
 
   http_stream stream(handle);
@@ -192,26 +192,54 @@ void fetch_data()
   {
     if (reader.depth() == 1)
     {
-      if (reader.node_type() == json_node_type::field &&
-          !strcmp("current", reader.value()))
+      if (reader.node_type() != json_node_type::field)
       {
-        state = J_CURRENT;
+        continue;
+      }
+
+      if (!strcmp("weather", reader.value()))
+      {
+        puts("Set state to weather");
+        state = J_WEATHER;
+      }
+      else if (!strcmp("sys", reader.value()))
+      {
+        puts("Set state to sys");
+        state = J_SYS;
+      }
+      else if (!strcmp("main", reader.value()))
+      {
+        puts("Set state to main");
+        state = J_MAIN;
       }
     }
     else
     {
-      if (state == J_CURRENT)
+      if (state == J_WEATHER)
       {
-        if (reader.node_type() == json_node_type::field &&
-            !strcmp("weather", reader.value()))
-        {
-          state = J_CURRENT_WEATHER;
-        }
-        else if (reader.node_type() != json_node_type::field)
+        if (reader.node_type() != json_node_type::field)
         {
           continue;
         }
 
+        puts("Parse inside weather fields\n");
+        if (!strcmp("id", reader.value()) && reader.read())
+        {
+          weather_id = reader.value_int();
+        }
+        else if (!strcmp("description", reader.value()) && reader.read())
+        {
+          strcpy(weather_desc, reader.value());
+        }
+      }
+      else if (state == J_SYS)
+      {
+        if (reader.node_type() != json_node_type::field)
+        {
+          continue;
+        }
+
+        puts("Parse inside sys fields");
         if (!strcmp("sunrise", reader.value()) && reader.read())
         {
           sunrise = reader.value_int();
@@ -220,7 +248,16 @@ void fetch_data()
         {
           sunset = reader.value_int();
         }
-        else if (!strcmp("temp", reader.value()) && reader.read())
+      }
+      else if (state == J_MAIN)
+      {
+        if (reader.node_type() != json_node_type::field)
+        {
+          continue;
+        }
+
+        puts("Parse inside main fields");
+        if (!strcmp("temp", reader.value()) && reader.read())
         {
           temp = reader.value_real();
         }
@@ -230,23 +267,7 @@ void fetch_data()
         }
         else if (!strcmp("humidity", reader.value()) && reader.read())
         {
-          humidity = reader.value_real();
-        }
-      }
-      else if (state == J_CURRENT_WEATHER)
-      {
-        if (reader.node_type() != json_node_type::field)
-        {
-          continue;
-        }
-
-        if (!strcmp("id", reader.value()) && reader.read())
-        {
-          weather_id = reader.value_int();
-        }
-        else if (!strcmp("description", reader.value()) && reader.read())
-        {
-          strcpy(weather_desc, reader.value());
+          humidity = reader.value_int();
         }
       }
     }
