@@ -172,9 +172,12 @@ void fetch_data()
   if (status < 200 || status > 299)
   {
     // HTTP error
-    puts("HTTP error!\n");
+    puts("HTTP error!");
     return;
   }
+
+  http_stream stream(handle);
+  json_reader_ex<64> reader(stream);
 
   enum
   {
@@ -183,9 +186,6 @@ void fetch_data()
     J_WEATHER,
     J_SYS
   };
-
-  http_stream stream(handle);
-  json_reader_ex<64> reader(stream);
   int state = J_START;
 
   while (reader.read())
@@ -199,30 +199,26 @@ void fetch_data()
 
       if (!strcmp("weather", reader.value()))
       {
-        puts("Set state to weather");
         state = J_WEATHER;
       }
       else if (!strcmp("sys", reader.value()))
       {
-        puts("Set state to sys");
         state = J_SYS;
       }
       else if (!strcmp("main", reader.value()))
       {
-        puts("Set state to main");
         state = J_MAIN;
       }
     }
     else
     {
+      if (reader.node_type() != json_node_type::field)
+      {
+        continue;
+      }
+
       if (state == J_WEATHER)
       {
-        if (reader.node_type() != json_node_type::field)
-        {
-          continue;
-        }
-
-        puts("Parse inside weather fields\n");
         if (!strcmp("id", reader.value()) && reader.read())
         {
           weather_id = reader.value_int();
@@ -234,12 +230,6 @@ void fetch_data()
       }
       else if (state == J_SYS)
       {
-        if (reader.node_type() != json_node_type::field)
-        {
-          continue;
-        }
-
-        puts("Parse inside sys fields");
         if (!strcmp("sunrise", reader.value()) && reader.read())
         {
           sunrise = reader.value_int();
@@ -251,12 +241,6 @@ void fetch_data()
       }
       else if (state == J_MAIN)
       {
-        if (reader.node_type() != json_node_type::field)
-        {
-          continue;
-        }
-
-        puts("Parse inside main fields");
         if (!strcmp("temp", reader.value()) && reader.read())
         {
           temp = reader.value_real();
