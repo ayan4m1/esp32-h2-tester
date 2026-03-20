@@ -395,7 +395,7 @@ extern "C" void app_main()
   wifi.connect(WIFI_SSID, WIFI_PSK);
   while (wifi.state() != wifi_manager_state::connected)
   {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
   }
 
   loading_label.text(fetching_format_string);
