@@ -88,16 +88,16 @@ static const char *connecting_format_string = "Connecting...";
 static const char *fetching_format_string = "Fetching...";
 
 // to hold API response data
-static char weather_desc[40];
+static char weather_desc[40] = {0};
 static int sunrise, sunset, pressure, weather_id, humidity;
 static float temp;
 
 // to hold strings formatted for display
-static char temp_text[15];
-static char short_temp_text[15];
-static char pres_text[15];
-static char time_text[15];
-static char hume_text[15];
+static char temp_text[15] = {0};
+static char short_temp_text[15] = {0};
+static char pres_text[15] = {0};
+static char time_text[15] = {0};
+static char hume_text[15] = {0};
 
 void lcd_flush_complete(void)
 {
