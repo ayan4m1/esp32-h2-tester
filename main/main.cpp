@@ -1,5 +1,6 @@
 #include <esp_http_client.h>
 #include <esp_netif_sntp.h>
+#include <esp_sntp.h>
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -79,13 +80,13 @@ static uix::display lcd;
 static wifi_manager wifi;
 // static OpenWeatherMap weather;
 
-static const char *time_format_string = " %02d:%02d";
-static const char *temp_format_string = "%6.1f °F";
-static const char *short_temp_format_string = "%.1f°F";
-static const char *pres_format_string = "%6d mb";
-static const char *hume_format_string = "%6d %%RH";
-static const char *connecting_format_string = "Connecting...";
-static const char *fetching_format_string = "Fetching...";
+static const char* time_format_string = " %02d:%02d";
+static const char* temp_format_string = "%6.1f °F";
+static const char* short_temp_format_string = "%.1f°F";
+static const char* pres_format_string = "%6d mb";
+static const char* hume_format_string = "%6d %%RH";
+static const char* connecting_format_string = "Connecting...";
+static const char* fetching_format_string = "Fetching...";
 
 // to hold API response data
 static char weather_desc[40] = {0};
@@ -99,15 +100,13 @@ static char pres_text[15] = {0};
 static char time_text[15] = {0};
 static char hume_text[15] = {0};
 
-void lcd_flush_complete(void)
-{
+void lcd_flush_complete(void) {
   // let UIX know the DMA transfer completed
   lcd.flush_complete();
 }
-static void uix_flush(const rect16 &bounds, const void *bitmap, void *state)
-{
+static void uix_flush(const rect16& bounds, const void* bitmap, void* state) {
   // similar to LVGL
-  lcd_flush(bounds.x1, bounds.y1, bounds.x2, bounds.y2, (void *)bitmap);
+  lcd_flush(bounds.x1, bounds.y1, bounds.x2, bounds.y2, (void*)bitmap);
 }
 #if LCD_COLOR_SPACE == LCD_COLOR_GSC
 #define PIXEL gsc_pixel<LCD_BIT_DEPTH>
@@ -144,33 +143,28 @@ label_t hume_label;
 label_t pres_label;
 icon_t weather_icon;
 
-void animate_label(bool state, bool rightAlign = false)
-{
+void animate_label(bool state, bool rightAlign = false) {
   auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
 
-  while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1)
-  {
+  while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1) {
     bounds.x1 = x1;
     time_label.bounds(bounds);
     lcd.update();
-    vTaskDelay(8335 / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(16.67));
   }
 }
 
-tm unixToTm(unsigned long timestamp)
-{
-  time_t time = static_cast<time_t>(timestamp);
+tm unixToTm(unsigned long timestamp) {
+  auto time = static_cast<time_t>(timestamp);
   return *localtime(&time);
 }
 
-void fetch_data()
-{
+void fetch_data() {
   http_handle_t handle = http_init(OWM_API_URL);
   int status = http_read_status_and_headers(handle);
 
-  if (status < 200 || status > 299)
-  {
+  if (status < 200 || status > 299) {
     // HTTP error
     puts("HTTP error!");
     return;
@@ -179,78 +173,45 @@ void fetch_data()
   http_stream stream(handle);
   json_reader_ex<64> reader(stream);
 
-  enum
-  {
-    J_START = 0,
-    J_MAIN,
-    J_WEATHER,
-    J_SYS
-  };
+  enum { J_START = 0, J_MAIN, J_WEATHER, J_SYS };
   int state = J_START;
 
-  while (reader.read())
-  {
-    if (reader.depth() == 1)
-    {
-      if (reader.node_type() != json_node_type::field)
-      {
+  while (reader.read()) {
+    if (reader.depth() == 1) {
+      if (reader.node_type() != json_node_type::field) {
         continue;
       }
 
-      if (!strcmp("weather", reader.value()))
-      {
+      if (!strcmp("weather", reader.value())) {
         state = J_WEATHER;
-      }
-      else if (!strcmp("sys", reader.value()))
-      {
+      } else if (!strcmp("sys", reader.value())) {
         state = J_SYS;
-      }
-      else if (!strcmp("main", reader.value()))
-      {
+      } else if (!strcmp("main", reader.value())) {
         state = J_MAIN;
       }
-    }
-    else
-    {
-      if (reader.node_type() != json_node_type::field)
-      {
+    } else {
+      if (reader.node_type() != json_node_type::field) {
         continue;
       }
 
-      if (state == J_WEATHER)
-      {
-        if (!strcmp("id", reader.value()) && reader.read())
-        {
+      if (state == J_WEATHER) {
+        if (!strcmp("id", reader.value()) && reader.read()) {
           weather_id = reader.value_int();
-        }
-        else if (!strcmp("description", reader.value()) && reader.read())
-        {
+        } else if (!strcmp("description", reader.value()) && reader.read()) {
           strcpy(weather_desc, reader.value());
         }
-      }
-      else if (state == J_SYS)
-      {
-        if (!strcmp("sunrise", reader.value()) && reader.read())
-        {
+      } else if (state == J_SYS) {
+        if (!strcmp("sunrise", reader.value()) && reader.read()) {
           sunrise = reader.value_int();
-        }
-        else if (!strcmp("sunset", reader.value()) && reader.read())
-        {
+        } else if (!strcmp("sunset", reader.value()) && reader.read()) {
           sunset = reader.value_int();
         }
-      }
-      else if (state == J_MAIN)
-      {
-        if (!strcmp("temp", reader.value()) && reader.read())
-        {
+      } else if (state == J_MAIN) {
+        if (!strcmp("temp", reader.value()) && reader.read()) {
           temp = reader.value_real();
-        }
-        else if (!strcmp("pressure", reader.value()) && reader.read())
-        {
+        } else if (!strcmp("pressure", reader.value()) && reader.read()) {
           pressure = reader.value_int();
-        }
-        else if (!strcmp("humidity", reader.value()) && reader.read())
-        {
+        } else if (!strcmp("humidity", reader.value()) && reader.read()) {
           humidity = reader.value_int();
         }
       }
@@ -260,75 +221,58 @@ void fetch_data()
   http_end(handle);
 
   time_t now;
+  struct tm current_time;
   time(&now);
 
-  struct tm curTime = unixToTm(now);
-  struct tm sunriseTime = unixToTm(sunrise - DST_OFFSET);
-  struct tm sunsetTime = unixToTm(sunset - DST_OFFSET);
+  now += UTC_OFFSET + DST_OFFSET;
+
+  localtime_r(&now, &current_time);
+
+  struct tm sunrise_time = unixToTm(sunrise - DST_OFFSET);
+  struct tm sunset_time = unixToTm(sunset - DST_OFFSET);
 
   uint8_t status_code = floor(weather_id / 100);
 
-  auto sunriseSeconds = (sunriseTime.tm_hour * 60 * 60) +
-                        (sunriseTime.tm_min * 60) + sunriseTime.tm_sec;
-  auto sunsetSeconds = (sunsetTime.tm_hour * 60 * 60) +
-                       (sunsetTime.tm_min * 60) + sunsetTime.tm_sec;
-  auto timestampSeconds = (curTime.tm_hour * 60 * 60) +
-                          (curTime.tm_min * 60) + curTime.tm_sec;
+  auto sunrise_seconds = (sunrise_time.tm_hour * 60 * 60) +
+                         (sunrise_time.tm_min * 60) + sunrise_time.tm_sec;
+  auto sunset_seconds = (sunset_time.tm_hour * 60 * 60) +
+                        (sunset_time.tm_min * 60) + sunset_time.tm_sec;
+  auto current_seconds = (current_time.tm_hour * 60 * 60) +
+                         (current_time.tm_min * 60) + current_time.tm_sec;
 
-  if (status_code == 6)
-  {
+  if (status_code == 6) {
     weather_icon.image(snowflake_icon);
-  }
-  else if (!strcmp(weather_desc, "few clouds"))
-  {
-    if (timestampSeconds >= sunriseSeconds &&
-        timestampSeconds <= sunsetSeconds)
-    {
+  } else if (!strcmp(weather_desc, "few clouds")) {
+    if (current_seconds >= sunrise_seconds &&
+        current_seconds <= sunset_seconds) {
       weather_icon.image(clouds_sun_icon);
-    }
-    else
-    {
+    } else {
       weather_icon.image(moon_cloud_icon);
     }
-  }
-  else if (!strcmp(weather_desc, "scattered clouds"))
-  {
+  } else if (!strcmp(weather_desc, "scattered clouds")) {
     weather_icon.image(cloud_icon);
-  }
-  else if (!strcmp(weather_desc, "broken clouds") ||
-           !strcmp(weather_desc, "overcast clouds"))
-  {
+  } else if (!strcmp(weather_desc, "broken clouds") ||
+             !strcmp(weather_desc, "overcast clouds")) {
     weather_icon.image(clouds_icon);
-  }
-  else if (status_code == 5 || status_code == 3)
-  {
+  } else if (status_code == 5 || status_code == 3) {
     weather_icon.image(cloud_rain_icon);
-  }
-  else if (status_code == 2)
-  {
+  } else if (status_code == 2) {
     weather_icon.image(lightning_icon);
-  }
-  else if (status_code == 8)
-  {
-    if (timestampSeconds >= sunriseSeconds &&
-        timestampSeconds <= sunsetSeconds)
-    {
+  } else if (status_code == 8) {
+    if (current_seconds >= sunrise_seconds &&
+        current_seconds <= sunset_seconds) {
       weather_icon.image(sun_icon);
-    }
-    else
-    {
+    } else {
       weather_icon.image(moon_icon);
     }
-  }
-  else if (status_code == 7)
-  {
+  } else if (status_code == 7) {
     weather_icon.image(cloud_fog_icon);
   }
 
   snprintf(temp_text, sizeof(temp_text), temp_format_string, temp);
   snprintf(pres_text, sizeof(pres_text), pres_format_string, pressure);
-  snprintf(time_text, sizeof(time_text), time_format_string, curTime.tm_hour,
-           curTime.tm_min);
+  snprintf(time_text, sizeof(time_text), time_format_string,
+           current_time.tm_hour, current_time.tm_min);
   snprintf(hume_text, sizeof(hume_text), hume_format_string, humidity);
   snprintf(short_temp_text, sizeof(short_temp_text), short_temp_format_string,
            temp);
@@ -338,40 +282,36 @@ void fetch_data()
   temp_label.text(temp_text);
   hume_label.text(hume_text);
 
-  while (lcd.dirty())
-  {
-    lcd.update();
-    portYIELD();
-  }
+  lcd.update();
 
-  vTaskDelay(5000 / portTICK_PERIOD_MS);
+  vTaskDelay(pdMS_TO_TICKS(5000));
   animate_label(false);
   time_label.text(short_temp_text);
   animate_label(true);
-  vTaskDelay(5000 / portTICK_PERIOD_MS);
+  vTaskDelay(pdMS_TO_TICKS(5000));
   animate_label(false);
   time_label.text(time_text);
   animate_label(true, true);
 }
 
-void app_loop(void *params)
-{
-  uint32_t started = pdTICKS_TO_MS(xTaskGetTickCount());
+void app_loop(void* params) {
+  while (true) {
+    uint32_t started = pdTICKS_TO_MS(xTaskGetTickCount());
 
-  fetch_data();
+    fetch_data();
 
-  uint16_t elapsed = pdTICKS_TO_MS(xTaskGetTickCount()) - started;
+    uint16_t elapsed = pdTICKS_TO_MS(xTaskGetTickCount()) - started;
 
-  vTaskDelay((60000 - elapsed) / portTICK_PERIOD_MS);
+    vTaskDelay((60000 - elapsed) / portTICK_PERIOD_MS);
+  }
 }
 
-extern "C" void app_main()
-{
+extern "C" void app_main() {
   lcd_init();
 
   lcd.buffer_size(LCD_TRANSFER_SIZE);
-  lcd.buffer1((uint8_t *)lcd_buffer1());
-  lcd.buffer2((uint8_t *)lcd_buffer2());
+  lcd.buffer1((uint8_t*)lcd_buffer1());
+  lcd.buffer2((uint8_t*)lcd_buffer2());
   lcd.on_flush_callback(uix_flush);
 
   small_text_font.initialize();
@@ -393,21 +333,27 @@ extern "C" void app_main()
   lcd.update();
 
   wifi.connect(WIFI_SSID, WIFI_PSK);
-  while (wifi.state() != wifi_manager_state::connected)
-  {
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+  while (wifi.state() != wifi_manager_state::connected) {
+    vTaskDelay(pdMS_TO_TICKS(500));
   }
 
   loading_label.text(fetching_format_string);
   lcd.update();
 
   esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
-  esp_netif_sntp_init(&config);
+  ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
+
+  int retry = 0;
+
+  while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < 10) {
+    vTaskDelay(pdMS_TO_TICKS(2000));
+  }
 
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
   main_screen.background_color(scr_color_t::black);
 
-  time_label.bounds(srect16(16, LCD_HEIGHT - 32, LCD_WIDTH, LCD_HEIGHT));
+  time_label.bounds(
+      srect16(16, LCD_HEIGHT - 32, LCD_WIDTH - 1, LCD_HEIGHT - 1));
   time_label.font(clock_text_font);
   time_label.color(uix_color_t::white);
   time_label.text_justify(uix_justify::top_left);
@@ -437,8 +383,5 @@ extern "C" void app_main()
 
   lcd.active_screen(main_screen);
 
-  fetch_data();
-
-  xTaskCreatePinnedToCore(app_loop, "app", CONFIG_ESP_MAIN_TASK_STACK_SIZE,
-                          nullptr, 20, nullptr, 0);
+  xTaskCreatePinnedToCore(app_loop, "app", 12000, nullptr, 20, nullptr, 0);
 }
