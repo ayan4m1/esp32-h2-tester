@@ -86,6 +86,7 @@ static const char* short_temp_format_string = "%.1f°F";
 static const char* pres_format_string = "%6d mb";
 static const char* hume_format_string = "%6d %%RH";
 static const char* connecting_format_string = "Connecting...";
+static const char* sync_time_format_string = "Sync Time...";
 static const char* fetching_format_string = "Fetching...";
 
 // to hold API response data
@@ -143,7 +144,26 @@ label_t hume_label;
 label_t pres_label;
 icon_t weather_icon;
 
-void animate_label(bool state, bool rightAlign = false) {
+typedef struct {
+  bool state;
+  bool rightAlign;
+} animate_time_label_param_t;
+typedef struct {
+  bool state;
+  label_t* label;
+} animate_small_label_param_t;
+
+static animate_time_label_param_t show_label_left = {true, false};
+static animate_time_label_param_t show_label_right = {true, false};
+static animate_time_label_param_t hide_label = {false, false};
+static animate_small_label_param_t hide_temp = {false, &temp_label};
+static animate_small_label_param_t hide_pres = {false, &pres_label};
+static animate_small_label_param_t hide_hume = {false, &hume_label};
+
+void animate_time_label(void* parameters) {
+  auto params = (animate_time_label_param_t*)parameters;
+  bool state = params->state;
+  bool rightAlign = params->rightAlign;
   auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
 
@@ -151,9 +171,26 @@ void animate_label(bool state, bool rightAlign = false) {
     bounds.x1 = x1;
     time_label.bounds(bounds);
     lcd.update();
-    vTaskDelay(pdMS_TO_TICKS(16.67));
+    vTaskDelay(pdMS_TO_TICKS(16));
   }
 }
+
+void animate_small_label(void* parameters) {
+  auto params = (animate_small_label_param_t*)parameters;
+  bool state = params->state;
+  auto bounds = srect16(params->label->bounds());
+  auto initial_y = bounds.y1;
+  uint16_t y1 = bounds.y1;
+
+  while (state ? y1-- > initial_y : y1++ < initial_y + 10) {
+    bounds.y1 = y1;
+    params->label->bounds(bounds);
+    lcd.update();
+    vTaskDelay(pdMS_TO_TICKS(16));
+  }
+}
+
+uint16_t get_animation_ms(uint16_t frames) { return frames * 16; }
 
 tm unixToTm(unsigned long timestamp) {
   auto time = static_cast<time_t>(timestamp);
@@ -285,13 +322,16 @@ void fetch_data() {
   lcd.update();
 
   vTaskDelay(pdMS_TO_TICKS(5000));
-  animate_label(false);
-  time_label.text(short_temp_text);
-  animate_label(true);
-  vTaskDelay(pdMS_TO_TICKS(5000));
-  animate_label(false);
-  time_label.text(time_text);
-  animate_label(true, true);
+  // animate_time_label(&hide_label);
+  // time_label.text(short_temp_text);
+  // animate_time_label(&show_label_left);
+  // vTaskDelay(pdMS_TO_TICKS(5000));
+  // animate_time_label(&hide_label);
+  // time_label.text(time_text);
+  // animate_time_label(&show_label_right);
+  animate_small_label(&hide_temp);
+  animate_small_label(&hide_hume);
+  animate_small_label(&hide_pres);
 }
 
 void app_loop(void* params) {
@@ -302,7 +342,7 @@ void app_loop(void* params) {
 
     uint16_t elapsed = pdTICKS_TO_MS(xTaskGetTickCount()) - started;
 
-    vTaskDelay((60000 - elapsed) / portTICK_PERIOD_MS);
+    vTaskDelay(pdMS_TO_TICKS(60000 - elapsed));
   }
 }
 
@@ -337,17 +377,20 @@ extern "C" void app_main() {
     vTaskDelay(pdMS_TO_TICKS(500));
   }
 
-  loading_label.text(fetching_format_string);
-  lcd.update();
-
   esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
   ESP_ERROR_CHECK(esp_netif_sntp_init(&config));
 
   int retry = 0;
 
+  loading_label.text(sync_time_format_string);
+  lcd.update();
+
   while (sntp_get_sync_status() == SNTP_SYNC_STATUS_RESET && ++retry < 10) {
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
+
+  loading_label.text(fetching_format_string);
+  lcd.update();
 
   main_screen.dimensions({LCD_WIDTH, LCD_HEIGHT});
   main_screen.background_color(scr_color_t::black);
@@ -383,5 +426,5 @@ extern "C" void app_main() {
 
   lcd.active_screen(main_screen);
 
-  xTaskCreatePinnedToCore(app_loop, "app", 12000, nullptr, 20, nullptr, 0);
+  xTaskCreatePinnedToCore(app_loop, "app", 12000, nullptr, 10, nullptr, 0);
 }
