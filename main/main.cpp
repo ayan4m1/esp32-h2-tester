@@ -265,8 +265,8 @@ void fetch_data() {
 
   localtime_r(&now, &current_time);
 
-  struct tm sunrise_time = unixToTm(sunrise - DST_OFFSET);
-  struct tm sunset_time = unixToTm(sunset - DST_OFFSET);
+  struct tm sunrise_time = unixToTm(sunrise + UTC_OFFSET + DST_OFFSET);
+  struct tm sunset_time = unixToTm(sunset + UTC_OFFSET + DST_OFFSET);
 
   uint8_t status_code = floor(weather_id / 100);
 
