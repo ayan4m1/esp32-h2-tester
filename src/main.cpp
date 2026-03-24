@@ -81,13 +81,13 @@ using namespace json;
 
 static uix::display lcd;
 static wifi_manager wifi;
-// static OpenWeatherMap weather;
 
+// snprintf format strings
 static const char* time_format_string = " %02d:%02d";
-static const char* long_time_format_string = "      %02d:%02d";
+static const char* long_time_format_string = "  %02d:%02d";
 static const char* short_temp_format_string = "%.1f°F";
-static const char* temp_range_format_string = "    %.0f-%.0f°F";
-static const char* temp_format_string = "     %.1f°F";
+static const char* temp_range_format_string = "%.0f-%.0f°F";
+static const char* temp_format_string = " %.1f°F";
 static const char* connecting_format_string = "Connecting...";
 static const char* sync_time_format_string = "Sync Time...";
 static const char* fetching_format_string = "Fetching...";
@@ -112,17 +112,14 @@ static void uix_flush(const rect16& bounds, const void* bitmap, void* state) {
   // similar to LVGL
   lcd_flush(bounds.x1, bounds.y1, bounds.x2, bounds.y2, (void*)bitmap);
 }
-// the following can be abbreviated as
-// using screen_t = uix::screen<rgb_pixel<16>>;
-// for most configurations
-using screen_t =
-    uix::screen_ex<bitmap<gsc_pixel<LCD_BIT_DEPTH>>, LCD_X_ALIGN, LCD_Y_ALIGN>;
+using screen_t = uix::screen<gsc_pixel<LCD_BIT_DEPTH>>;
 
 // native screen color
 using scr_color_t = color<screen_t::pixel_type>;
 // UIX color (rgba32)
 using uix_color_t = color<uix_pixel>;
 
+// fonts and screens
 static tt_font small_text_font(telegrama, 12, font_size_units::px);
 static tt_font large_text_font(telegrama, 14, font_size_units::px);
 static tt_font clock_text_font(telegrama, 28, font_size_units::px);
@@ -130,8 +127,7 @@ static tt_font clock_text_font(telegrama, 28, font_size_units::px);
 static screen_t main_screen;
 static screen_t loading_screen;
 
-// each control has a "control surface" derived from a type indicated by the
-// screen:
+// control types
 using label_t = uix::label<screen_t::control_surface_type>;
 using icon_t = uix::image_box<screen_t::control_surface_type>;
 using vlabel_t = uix::vlabel<screen_t::control_surface_type>;
@@ -142,7 +138,6 @@ label_t time_label;
 label_t temp_label;
 label_t temp_range_label;
 rect_t hume_rect;
-rect_t hume_border;
 icon_t weather_icon;
 
 typedef struct {
@@ -161,7 +156,7 @@ void animate_time_label(void* parameters) {
   auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
 
-  while (state ? x1-- > (rightAlign ? 16 : 0) : x1++ < LCD_WIDTH - 1) {
+  while (state ? x1-- > (rightAlign ? 16 : 12) : x1++ < LCD_WIDTH - 1) {
     bounds.x1 = x1;
     time_label.bounds(bounds);
     while (lcd.dirty()) {
@@ -225,6 +220,7 @@ void fetch_data() {
           temp = reader.value_real();
         } else if (!strcmp("humidity", reader.value()) && reader.read()) {
           humidity = reader.value_int();
+          hume_rect.invalidate();
         } else if (!strcmp("weather", reader.value())) {
           state = J_CURRENT_WEATHER;
         }
@@ -311,9 +307,6 @@ void draw_screen() {
   time_label.text(time_text);
   temp_range_label.text(temp_range_text);
 
-  // todo: update humidity progress bar
-  float humidityPercent = humidity / 100.0f;
-
   while (lcd.dirty()) {
     lcd.update();
   }
@@ -349,7 +342,20 @@ void app_loop(void* params) {
   }
 }
 
-void test(rect_t::control_surface_type& dst, const srect16& clip, void* state) {
+void paint_hume_bar(rect_t::control_surface_type& dst, const srect16& clip,
+                    void* state) {
+  // top border
+  dst.fill(rect16(clip.x1, 0, clip.x2, 1), scr_color_t::white);
+  // right border
+  dst.fill(rect16(clip.x2, 0, clip.x2, clip.y2), scr_color_t::white);
+  // bottom border
+  dst.fill(rect16(clip.x1, clip.y2 - 1, clip.x2, clip.y2), scr_color_t::white);
+  // left border
+  dst.fill(rect16(clip.x1, 0, clip.x1, clip.y2), scr_color_t::white);
+  // bar
+  dst.fill(rect16(clip.x1, (uint8_t)(LCD_HEIGHT * (1 - (humidity / 100.0f))),
+                  clip.x2, clip.y2),
+           scr_color_t::white);
 }
 
 extern "C" void app_main() {
@@ -408,21 +414,20 @@ extern "C" void app_main() {
   time_label.text_justify(uix_justify::top_left);
   main_screen.register_control(time_label);
 
-  temp_label.bounds(srect16(0, 0, LCD_WIDTH - 32, 16));
+  temp_label.bounds(srect16(26, 0, LCD_WIDTH - 32, 15));
   temp_label.font(small_text_font);
   temp_label.color(uix_color_t::white);
   temp_label.text_justify(uix_justify::top_left);
   main_screen.register_control(temp_label);
 
-  temp_range_label.bounds(srect16(0, 16, LCD_WIDTH - 32, 32));
+  temp_range_label.bounds(srect16(26, 16, LCD_WIDTH - 32, 31));
   temp_range_label.font(small_text_font);
   temp_range_label.color(uix_color_t::white);
   temp_range_label.text_justify(uix_justify::top_left);
   main_screen.register_control(temp_range_label);
 
-  hume_rect.bounds(srect16(0, 0, LCD_WIDTH - 33, 15));
-  hume_rect.on_paint_callback(test);
-  main_screen.register_control(hume_border);
+  hume_rect.bounds(srect16(0, 0, 10, LCD_HEIGHT));
+  hume_rect.on_paint_callback(paint_hume_bar);
   main_screen.register_control(hume_rect);
 
   weather_icon.bounds(srect16(LCD_WIDTH - 32, 0, LCD_WIDTH, 32));
