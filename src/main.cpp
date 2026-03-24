@@ -96,6 +96,7 @@ static const char* fetching_format_string = "Fetching...";
 static char weather_desc[40] = {0};
 static int sunrise, sunset, weather_id, humidity;
 static float temp, min_temp, max_temp;
+static bool max_temp_set, min_temp_set;
 
 // to hold strings formatted for display
 static char short_temp_text[15] = {0};
@@ -229,10 +230,16 @@ void fetch_data() {
           state = J_DAILY_TEMP;
         }
       } else if (state == J_DAILY_TEMP) {
+        if (max_temp_set && min_temp_set) {
+          break;
+        }
+
         if (!strcmp("max", reader.value()) && reader.read()) {
           max_temp = reader.value_real();
+          max_temp_set = true;
         } else if (!strcmp("min", reader.value()) && reader.read()) {
           min_temp = reader.value_real();
+          min_temp_set = true;
         }
       }
     }
