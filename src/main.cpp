@@ -84,10 +84,10 @@ static wifi_manager wifi;
 
 // snprintf format strings
 static const char* time_format_string = " %02d:%02d";
-static const char* long_time_format_string = "  %02d:%02d";
+static const char* long_time_format_string = "   %02d:%02d";
 static const char* short_temp_format_string = "%.1f°F";
-static const char* temp_range_format_string = "%.0f-%.0f°F";
-static const char* temp_format_string = " %.1f°F";
+static const char* temp_range_format_string = " %.0f-%.0f°F";
+static const char* temp_format_string = "  %.1f°F";
 static const char* connecting_format_string = "Connecting...";
 static const char* sync_time_format_string = "Sync Time...";
 static const char* fetching_format_string = "Fetching...";
@@ -157,7 +157,7 @@ void animate_time_label(void* parameters) {
   auto bounds = srect16(time_label.bounds());
   uint16_t x1 = bounds.x1;
 
-  while (state ? x1-- > (rightAlign ? 16 : 12) : x1++ < LCD_WIDTH - 1) {
+  while (state ? x1-- > (rightAlign ? 16 : 14) : x1++ < LCD_WIDTH - 1) {
     bounds.x1 = x1;
     time_label.bounds(bounds);
     while (lcd.dirty()) {
@@ -363,6 +363,15 @@ void paint_hume_bar(rect_t::control_surface_type& dst, const srect16& clip,
   dst.fill(rect16(clip.x1, (uint8_t)(LCD_HEIGHT * (1 - (humidity / 100.0f))),
                   clip.x2, clip.y2),
            scr_color_t::white);
+  // label
+  text_info info = text_info("H", small_text_font);
+
+  bool draw_top = humidity < 50;
+  uint8_t y = draw_top ? (((humidity / 100.0f)) * LCD_HEIGHT) / 2
+                       : LCD_HEIGHT - (((humidity / 100.0f) * LCD_HEIGHT) / 2);
+
+  draw::text(dst, rect16(clip.x1 + 2, y - 6, clip.x2, y + 6), info,
+             draw_top ? scr_color_t::white : scr_color_t::black);
 }
 
 extern "C" void app_main() {
@@ -433,7 +442,7 @@ extern "C" void app_main() {
   temp_range_label.text_justify(uix_justify::top_left);
   main_screen.register_control(temp_range_label);
 
-  hume_rect.bounds(srect16(0, 0, 10, LCD_HEIGHT));
+  hume_rect.bounds(srect16(0, 0, 11, LCD_HEIGHT));
   hume_rect.on_paint_callback(paint_hume_bar);
   main_screen.register_control(hume_rect);
 
