@@ -367,8 +367,10 @@ void paint_hume_bar(rect_t::control_surface_type& dst, const srect16& clip,
   text_info info = text_info("H", small_text_font);
 
   bool draw_top = humidity < 50;
-  uint8_t y = draw_top ? (((humidity / 100.0f)) * LCD_HEIGHT) / 2
+  uint8_t y = draw_top ? ((1 - (humidity / 100.0f)) * LCD_HEIGHT) / 2
                        : LCD_HEIGHT - (((humidity / 100.0f) * LCD_HEIGHT) / 2);
+  uint8_t y_min = math::max_(8, y - 6);
+  uint8_t y_max = math::min_(LCD_HEIGHT - 8, y + 6);
 
   draw::text(dst, rect16(clip.x1 + 2, y - 6, clip.x2, y + 6), info,
              draw_top ? scr_color_t::white : scr_color_t::black);
