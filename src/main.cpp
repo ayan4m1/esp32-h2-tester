@@ -245,6 +245,9 @@ void fetch_data() {
     }
   }
 
+  min_temp_set = false;
+  max_temp_set = false;
+
   http_end(handle);
 }
 
@@ -365,7 +368,6 @@ void paint_hume_bar(rect_t::control_surface_type& dst, const srect16& clip,
            scr_color_t::white);
   // label
   text_info info = text_info("H", small_text_font);
-
   bool draw_top = humidity < 50;
   uint8_t y = draw_top ? ((1 - (humidity / 100.0f)) * LCD_HEIGHT) / 2
                        : LCD_HEIGHT - (((humidity / 100.0f) * LCD_HEIGHT) / 2);
